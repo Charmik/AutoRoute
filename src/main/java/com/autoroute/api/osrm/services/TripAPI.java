@@ -2,6 +2,8 @@ package com.autoroute.api.osrm.services;
 
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
+import org.jetbrains.annotations.NotNull;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -27,12 +29,41 @@ public class TripAPI {
     }
 
     /**
-     * Solves the Traveling Salesman Problem using the road network and input points.
+     * Solves the Traveling Salesman Problem using the road network and input wayPoints.
      *
-     * @param points The list containing points in the trip.
+     * @param wayPoints The list containing wayPoints in the trip.
      * @return A JSON object containing the response code, an array of waypoint objects, and an array of route objects.
      */
-    public OsrmResponse generateTrip(List<WayPoint> points, boolean roundTrip) {
+    public OsrmResponse generateTrip(List<WayPoint> wayPoints, boolean roundTrip) throws TooManyCoordinatesException {
+        StringBuilder stringCoordinates = buildStringCoordinates(wayPoints);
+        System.out.println("coordinates: " + wayPoints.size());
+        String url = String.format("http://router.project-osrm.org/trip/v1/car/%s?geometries=geojson&overview=full&roundtrip=%s&source=first",
+            stringCoordinates, roundTrip);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI(url))
+                .header("accept", "application/json")
+                .GET()
+                .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            var json = new JSONObject(response.body());
+            try {
+                return getResponse(wayPoints, json);
+            } catch (JSONException e) {
+                throw new TooManyCoordinatesException("couldn't parse JSON: " + json, e);
+            }
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException("Couldn't create URI from url: " + url, e);
+        } catch (IOException e) {
+            throw new RuntimeException("couldn't read result from request", e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException("request was interrupted", e);
+        }
+    }
+
+    @NotNull
+    private static StringBuilder buildStringCoordinates(List<WayPoint> points) {
         StringBuilder stringCoordinates = new StringBuilder();
         stringCoordinates.append(points.get(0).latLon().lon())
             .append(",")
@@ -45,28 +76,10 @@ public class TripAPI {
                 stringCoordinates.append(";");
             }
         }
-        String url = String.format("http://router.project-osrm.org/trip/v1/car/%s?geometries=geojson&overview=full&roundtrip=%s&source=first",
-            stringCoordinates, roundTrip);
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI(url))
-                .header("accept", "application/json")
-                .GET()
-                .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            var json = new JSONObject(response.body());
-            return getResponseFromJson(json);
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("Couldn't create URI from url: " + url, e);
-        } catch (IOException e) {
-            throw new RuntimeException("couldn't read result from request", e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException("request was interrupted", e);
-        }
+        return stringCoordinates;
     }
 
-    private OsrmResponse getResponseFromJson(JSONObject json) {
+    private OsrmResponse getResponse(List<WayPoint> wayPoints, JSONObject json) {
         try {
             Files.write(Paths.get("out.json"), json.toString().getBytes());
         } catch (IOException e) {
@@ -86,6 +99,6 @@ public class TripAPI {
             var lat = arrayOfPoints.getJSONArray(i).getDouble(1);
             coordinates.add(new LatLon(lat, lon));
         }
-        return new OsrmResponse(code, distance_km, coordinates);
+        return new OsrmResponse(code, distance_km, coordinates, wayPoints);
     }
 }

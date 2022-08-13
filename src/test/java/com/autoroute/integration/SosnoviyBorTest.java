@@ -12,7 +12,6 @@ import io.jenetics.jpx.GPX;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,7 +40,6 @@ public class SosnoviyBorTest {
                     .buildRoute(150, 200, wayPoints);
 
                 final GPX gpx = GpxGenerator.generate(response.coordinates(), wayPoints);
-                GPX.write(gpx, Paths.get("track.gpx"));
                 Assertions.assertEquals(1, gpx.getTracks().size());
                 Assertions.assertEquals(4, gpx.getWayPoints().size());
                 success = true;

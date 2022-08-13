@@ -16,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class OverPassAPI {
 
@@ -27,7 +28,7 @@ public class OverPassAPI {
         this.overpass = new OverpassMapDataApi(connection);
     }
 
-    public List<OverpassResponse> GetNodesInBoxByTags(@NotNull Box box, List<Tag> tags) {
+    public List<OverpassResponse> GetNodesInBoxByTags(@NotNull Box box, Set<Tag> tags) {
         StringBuilder query = new StringBuilder("<union>\n");
         for (Tag tag : tags) {
             query.append("<query type=\"node\">\n");
@@ -55,7 +56,8 @@ public class OverPassAPI {
             @Override
             public void handle(@NotNull Node node) {
                 var position = node.getPosition();
-                var response = new OverpassResponse(node.getId(), node.getTags().get("name"),
+
+                var response = new OverpassResponse(node.getId(), node.getTags(),
                     new com.autoroute.osm.LatLon(position.getLatitude(), position.getLongitude()));
                 responses.add(response);
             }
