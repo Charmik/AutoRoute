@@ -1,5 +1,8 @@
-package com.autoroute.api.overpass;
+package com.autoroute.integration;
 
+import com.autoroute.api.overpass.Box;
+import com.autoroute.api.overpass.OverPassAPI;
+import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.osm.Tag;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -15,7 +18,8 @@ class OverPassAPITest {
     @Timeout(value = 1, unit = TimeUnit.MINUTES)
     void getThreeNodesInSosnoviyBor() {
         boolean success = false;
-        for (int i = 0; i < 3; i++) { // dirty hack to test API. it fails sometimes because of timeout
+        // dirty hack to test API. it fails sometimes because of timeout. Fix when stub-API will be implemented
+        for (int i = 0; i < 3; i++) {
             try {
                 var api = new OverPassAPI();
                 final Box box = new Box(59.369783, 28.577752, 59.982578, 29.842246);

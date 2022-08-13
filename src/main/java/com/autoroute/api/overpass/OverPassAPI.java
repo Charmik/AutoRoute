@@ -9,6 +9,8 @@ import de.westnordost.osmapi.map.data.Relation;
 import de.westnordost.osmapi.map.data.Way;
 import de.westnordost.osmapi.overpass.MapDataWithGeometryHandler;
 import de.westnordost.osmapi.overpass.OverpassMapDataApi;
+import org.apache.brooklyn.util.repeat.Repeater;
+import org.apache.brooklyn.util.time.Duration;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -21,6 +23,7 @@ public class OverPassAPI {
 
     public OverPassAPI() {
         OsmConnection connection = new OsmConnection("https://overpass-api.de/api/", "User-Agent: Mozilla/5.0");
+        connection.setTimeout(30 * 60 * 1000);
         this.overpass = new OverpassMapDataApi(connection);
     }
 
@@ -43,7 +46,7 @@ public class OverPassAPI {
 
         List<OverpassResponse> responses = new ArrayList<>();
 
-        overpass.queryElementsWithGeometry(query.toString(), new MapDataWithGeometryHandler() {
+        final MapDataWithGeometryHandler handler = new MapDataWithGeometryHandler() {
             @Override
             public void handle(@NotNull BoundingBox boundingBox) {
                 System.out.println("handle with boundingBox not implemented");
@@ -66,8 +69,21 @@ public class OverPassAPI {
             public void handle(@NotNull Relation relation, @NotNull BoundingBox boundingBox, @NotNull Map<Long, LatLon> map, @NotNull Map<Long, List<LatLon>> map1) {
                 System.out.println("handle with relation not implemented");
             }
-        });
+        };
+
+        Repeater.create("Wait to get data by OverPass API")
+            .until(() -> {
+                try {
+                    overpass.queryElementsWithGeometry(query.toString(), handler);
+                    return true;
+                } catch (Exception e) {
+                    System.out.println("couldn't get data by OverPass API, try to repeat: " + e.getMessage());
+                    return false;
+                }
+            })
+            .limitIterationsTo(10)
+            .backoff(Duration.FIVE_SECONDS, 5, Duration.FIVE_MINUTES)
+            .run();
         return responses;
     }
-
 }

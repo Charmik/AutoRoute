@@ -40,6 +40,14 @@
             <artifactId>jpx</artifactId>
             <version>3.0.1</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.brooklyn</groupId>
+            <artifactId>brooklyn-utils-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+
         <!--    tests    -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
