@@ -12,11 +12,11 @@ import java.net.http.HttpResponse;
 /**
  * @see <a href="http://project-osrm.org/docs/v5.7.0/api/#trip-service">orsm trip API documentation</a>
  */
-public class Trip {
+public class TripAPI {
 
     private final HttpClient client;
 
-    public Trip() {
+    public TripAPI() {
         this.client = HttpClient.newHttpClient();
     }
 
