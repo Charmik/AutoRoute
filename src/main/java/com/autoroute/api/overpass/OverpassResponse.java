@@ -10,11 +10,14 @@ public record OverpassResponse(long id, Map<String, String> tags, LatLon latLon)
         if (tags.containsKey("name")) {
             return tags.get("name");
         }
-        String name = "";
+        StringBuilder name = new StringBuilder();
         for (Map.Entry<String, String> entry : tags.entrySet()) {
-            name += "<" + entry.getKey() + ":" + entry.getValue() + ">";
+            name.append(entry.getKey())
+                .append(":")
+                .append(entry.getValue())
+                .append("\n");
         }
-        return name;
+        return name.toString();
     }
 
 }

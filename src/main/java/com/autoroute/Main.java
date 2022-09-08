@@ -12,12 +12,12 @@ import com.autoroute.osm.Tag;
 import com.autoroute.osm.WayPoint;
 import com.autoroute.tags.TagsFileReader;
 import io.jenetics.jpx.GPX;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,27 +25,34 @@ import java.util.Map;
 
 public class Main {
 
+    private static final Logger LOGGER = LogManager.getLogger(Main.class);
+
     private static final int MIN_KM = 50;
-    private static final int MAX_KM = 150;
+    private static final int MAX_KM = 100;
     private static final double DIFF_DEGREE = ((double) MAX_KM / Constants.KM_IN_ONE_DEGREE) / 2;
 
     public static void main(String[] args) throws IOException {
-        int i = 0;
-        while (i < 50) {
-            final LatLon startPoint = new LatLon(59.908977, 29.068520); // bor
+        LOGGER.info("Start Main");
+
+        for (int i = 0; i < 50; i++) {
+
+            var tagsReader = new TagsFileReader();
+            tagsReader.readTags();
+
+//            final LatLon startPoint = new LatLon(59.908977, 29.068520); // bor
 //            final LatLon startPoint = new LatLon(35.430590, -83.075770); // summer home
-//            final LatLon startPoint = new LatLon(34.687562, 32.961236); // CYPRUS
+            final LatLon startPoint = new LatLon(34.687562, 32.961236); // CYPRUS
 //            final LatLon startPoint = new LatLon(53.585437, 49.069918); // yagodnoe
+
+
             final Box box = new Box(
                 startPoint.lat() - DIFF_DEGREE,
                 startPoint.lon() - DIFF_DEGREE,
                 startPoint.lat() + DIFF_DEGREE,
                 startPoint.lon() + DIFF_DEGREE
-            ); // bor
+            );
 
             var overPassAPI = new OverPassAPI();
-            var tagsReader = new TagsFileReader();
-            tagsReader.readTags();
             final var overpassResponse = overPassAPI.GetNodesInBoxByTags(box, tagsReader.getTags());
 
             List<WayPoint> wayPoints = new ArrayList<>();
@@ -85,17 +92,18 @@ public class Main {
                 }
             }
             debugQuireByIds.append(");\nout;");
-            System.out.println("----------------------------");
-            System.out.println("----------------------------");
-            System.out.println("debugQuireByIds:\n" + debugQuireByIds);
-            System.out.println("found: " + wayPoints.size() + " nodes");
+            LOGGER.info("----------------------------");
+            LOGGER.info("----------------------------");
+            LOGGER.info("debugQuireByIds:\n" + debugQuireByIds);
+            LOGGER.info("found: " + wayPoints.size() + " nodes");
             tagToCounterStats.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(System.out::println);
 
             var pointVisiter = new PointVisiter();
             var duplicate = new Duplicate();
 
             final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate);
-            var response = routeDistanceAlgorithm.buildRoute(MIN_KM, MAX_KM, wayPoints, pointVisiter);
+
+            var response = routeDistanceAlgorithm.buildRoute(MIN_KM, MAX_KM, wayPoints, pointVisiter, 5);
             routeDistanceAlgorithm.getTripAPI().flush();
             if (response == null) {
                 break;
@@ -107,19 +115,16 @@ public class Main {
 
             final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
             for (WayPoint wayPoint : response.wayPoints()) {
-                System.out.println("https://www.openstreetmap.org/node/" + wayPoint.id());
+                LOGGER.info("https://www.openstreetmap.org/node/" + wayPoint.id());
             }
 
             final Path tracksFolder = Paths.get("tracks").resolve(Paths.get(startPoint.toString()));
-            boolean createdTrackFile = tracksFolder.toFile().mkdirs();
+            tracksFolder.toFile().mkdirs();
 
-            System.out.println("create a dir: " + tracksFolder + " success: " + createdTrackFile);
-            final Path tmpPath = tracksFolder.resolve("tmp.gpx");
-            GPX.write(gpx, tmpPath);
             var tracks = Duplicate.readTracks(startPoint);
-            var index = tracks.size();
-            Files.move(tmpPath, tracksFolder.resolve(index + ".gpx"), StandardCopyOption.REPLACE_EXISTING);
-            i++;
+            var index = tracks.size() + 1;
+            final Path gpxPath = tracksFolder.resolve(index + ".gpx");
+            GPX.write(gpx, gpxPath);
         }
     }
 }

@@ -31,7 +31,7 @@ public class SosnoviyBorTest {
                     new Tag("historic", "castle"),
                     new Tag("historic", "cannon")
                 );
-                var overPassAPI = new OverPassAPI();
+                var overPassAPI = new OverPassAPI(tagsReader);
                 final var overpassResponse = overPassAPI.GetNodesInBoxByTags(box, tags);
                 List<WayPoint> wayPoints = new ArrayList<>();
                 wayPoints.add(new WayPoint(1, new LatLon(59.908977, 29.068520), "Start"));

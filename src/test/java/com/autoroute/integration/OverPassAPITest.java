@@ -21,7 +21,7 @@ class OverPassAPITest {
         // dirty hack to test API. it fails sometimes because of timeout. Fix when stub-API will be implemented
         for (int i = 0; i < 3; i++) {
             try {
-                var api = new OverPassAPI();
+                var api = new OverPassAPI(tagsReader);
                 final Box box = new Box(59.369783, 28.577752, 59.982578, 29.842246);
                 final Set<Tag> tags = Set.of(new Tag("historic", "castle"), new Tag("historic", "cannon"));
                 final var overpassResponse = api.GetNodesInBoxByTags(box, tags);

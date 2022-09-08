@@ -1,5 +1,8 @@
 package com.autoroute.api.osrm.services;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -15,6 +18,7 @@ import java.util.Map;
 
 public class Cache {
 
+    private static final Logger LOGGER = LogManager.getLogger(Cache.class);
     private static final String CACHE_FILE = "config/cache/trip.ser";
 
     private Map<String, OsrmResponse> cache;
@@ -42,7 +46,7 @@ public class Cache {
             flush();
         }
         var finish = System.nanoTime();
-        System.out.println("load cache for: " + ((finish - startLoadCache) / 1_000_000) + " seconds");
+        LOGGER.info("load cache for: " + ((finish - startLoadCache) / 1_000_000) + " seconds");
     }
 
     synchronized OsrmResponse getOrNull(String request) {

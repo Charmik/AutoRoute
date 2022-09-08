@@ -11,6 +11,8 @@ import de.westnordost.osmapi.overpass.MapDataWithGeometryHandler;
 import de.westnordost.osmapi.overpass.OverpassMapDataApi;
 import org.apache.brooklyn.util.repeat.Repeater;
 import org.apache.brooklyn.util.time.Duration;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -19,6 +21,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class OverPassAPI {
+
+    private static final Logger LOGGER = LogManager.getLogger(OverPassAPI.class);
 
     private final OverpassMapDataApi overpass;
 
@@ -45,14 +49,14 @@ public class OverPassAPI {
         query.append("</union>\n");
         query.append("<print mode=\"meta\"/>\n");
 
-        System.out.println("query:\n" + query);
+        LOGGER.info("query:\n" + query);
 
         List<OverpassResponse> responses = new ArrayList<>();
 
         final MapDataWithGeometryHandler handler = new MapDataWithGeometryHandler() {
             @Override
             public void handle(@NotNull BoundingBox boundingBox) {
-                System.out.println("handle with boundingBox not implemented");
+                LOGGER.info("handle with boundingBox not implemented");
             }
 
             @Override
@@ -66,12 +70,12 @@ public class OverPassAPI {
 
             @Override
             public void handle(@NotNull Way way, @NotNull BoundingBox boundingBox, @NotNull List<LatLon> list) {
-                System.out.println("handle with way not implemented");
+                LOGGER.info("handle with way not implemented");
             }
 
             @Override
             public void handle(@NotNull Relation relation, @NotNull BoundingBox boundingBox, @NotNull Map<Long, LatLon> map, @NotNull Map<Long, List<LatLon>> map1) {
-                System.out.println("handle with relation not implemented");
+                LOGGER.info("handle with relation not implemented");
             }
         };
 
@@ -81,7 +85,7 @@ public class OverPassAPI {
                     overpass.queryElementsWithGeometry(query.toString(), handler);
                     return true;
                 } catch (Exception e) {
-                    System.out.println("couldn't get data by OverPass API, try to repeat: " + e.getMessage());
+                    LOGGER.info("couldn't get data by OverPass API, try to repeat: " + e.getMessage());
                     return false;
                 }
             })

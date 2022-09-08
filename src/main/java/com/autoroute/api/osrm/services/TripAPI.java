@@ -2,6 +2,8 @@ package com.autoroute.api.osrm.services;
 
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -22,6 +24,8 @@ import java.util.List;
  * @see <a href="http://project-osrm.org/docs/v5.7.0/api/#trip-service">orsm trip API documentation</a>
  */
 public class TripAPI {
+
+    private static final Logger LOGGER = LogManager.getLogger(TripAPI.class);
 
     private final HttpClient client;
     private final Cache cache;
@@ -63,14 +67,14 @@ public class TripAPI {
             return new OsrmResponse(cacheResult.code(), cacheResult.distance(), cacheResult.coordinates(),
                 wayPoints);
         }
-        System.out.println("url: " + url);
+        LOGGER.info("url: " + url);
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI(url))
                 .header("accept", "application/json")
                 .GET()
-                .timeout(Duration.of(20, ChronoUnit.SECONDS))
+                .timeout(Duration.of(120, ChronoUnit.SECONDS))
                 .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             final String body = response.body();
@@ -82,7 +86,7 @@ public class TripAPI {
                 }
                 return result;
             } catch (JSONException e) {
-                System.out.println("JSON error, request was: " + request);
+                LOGGER.info("JSON error, request was: " + request);
                 throw new TooManyCoordinatesException("couldn't parse JSON: " + body, e);
             }
         } catch (HttpTimeoutException e) {

@@ -2,6 +2,8 @@ package com.autoroute.gpx;
 
 import com.autoroute.osm.LatLon;
 import io.jenetics.jpx.GPX;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -11,6 +13,8 @@ import java.nio.file.Paths;
 import java.util.List;
 
 public class Duplicate {
+
+    private static final Logger LOGGER = LogManager.getLogger(Duplicate.class);
 
     public GPX readRoute(Path path) {
         try {
@@ -101,7 +105,7 @@ public class Duplicate {
                     gpxToCoordinates(duplicate.readRoute(path1)),
                     gpxToCoordinates(duplicate.readRoute(path2)));
                 if (isDuplicate) {
-                    System.out.println("path1: " + path1 + " path2: " + path2);
+                    LOGGER.info("path1: " + path1 + " path2: " + path2);
                 }
             }
         }
