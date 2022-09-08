@@ -12,8 +12,9 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,39 +24,75 @@ import java.util.List;
 public class TripAPI {
 
     private final HttpClient client;
+    private final Cache cache;
 
     public TripAPI() {
         this.client = HttpClient.newHttpClient();
+        this.cache = new Cache();
+        this.cache.loadCache();
+    }
+
+    public OsrmResponse generateRoute(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
+        return callAPI("routes", wayPoints, "route", "driving", "false");
     }
 
     /**
      * Solves the Traveling Salesman Problem using the road network and input wayPoints.
      *
      * @param wayPoints The list containing wayPoints in the trip.
-     * @return A JSON object containing the response code, an array of waypoint objects, and an array of route objects.
+     * @return a OsrmResponse.
      */
-    public OsrmResponse generateTrip(List<WayPoint> wayPoints, boolean roundTrip) throws TooManyCoordinatesException {
-        StringBuilder stringCoordinates = buildStringCoordinates(wayPoints);
-        System.out.println("coordinates: " + wayPoints.size());
-        String url = String.format("http://router.project-osrm.org/trip/v1/car/%s?geometries=geojson&overview=full&roundtrip=%s&source=first",
-            stringCoordinates, roundTrip);
+    public OsrmResponse generateTrip(List<WayPoint> wayPoints, boolean roundTrip) throws TooManyCoordinatesException, HttpTimeoutException {
+        return callAPI("trips", wayPoints, "trip", "bike", "full",
+            "roundtrip=" + roundTrip, "source=first");
+    }
+
+    @NotNull
+    private OsrmResponse callAPI(String name, List<WayPoint> wayPoints, String service, String profile,
+                                 String overview, String... additionalParams) throws TooManyCoordinatesException, HttpTimeoutException {
+
+        var stringCoordinates = buildStringCoordinates(wayPoints);
+        String url = String.format("http://router.project-osrm.org/" + service + "/v1/" + profile +
+                "/%s?geometries=geojson&overview=" + overview,
+            stringCoordinates);
+        for (String additionalParam : additionalParams) {
+            url += "&" + additionalParam;
+        }
+        final OsrmResponse cacheResult = cache.getOrNull(url);
+        if (cacheResult != null) {
+            return new OsrmResponse(cacheResult.code(), cacheResult.distance(), cacheResult.coordinates(),
+                wayPoints);
+        }
+        System.out.println("url: " + url);
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI(url))
                 .header("accept", "application/json")
                 .GET()
+                .timeout(Duration.of(20, ChronoUnit.SECONDS))
                 .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            var json = new JSONObject(response.body());
+            final String body = response.body();
             try {
-                return getResponse(wayPoints, json);
+                var json = new JSONObject(body);
+                final OsrmResponse result = getResponse(wayPoints, json, name);
+                if (wayPoints.size() < 4) {
+                    cache.write(url, result);
+                }
+                return result;
             } catch (JSONException e) {
-                throw new TooManyCoordinatesException("couldn't parse JSON: " + json, e);
+                System.out.println("JSON error, request was: " + request);
+                throw new TooManyCoordinatesException("couldn't parse JSON: " + body, e);
             }
+        } catch (HttpTimeoutException e) {
+            throw e;
         } catch (URISyntaxException e) {
             throw new IllegalArgumentException("Couldn't create URI from url: " + url, e);
         } catch (IOException e) {
+            if (e instanceof HttpTimeoutException) {
+                throw (HttpTimeoutException) e;
+            }
             throw new RuntimeException("couldn't read result from request", e);
         } catch (InterruptedException e) {
             throw new RuntimeException("request was interrupted", e);
@@ -63,7 +100,7 @@ public class TripAPI {
     }
 
     @NotNull
-    private static StringBuilder buildStringCoordinates(List<WayPoint> points) {
+    private static String buildStringCoordinates(List<WayPoint> points) {
         StringBuilder stringCoordinates = new StringBuilder();
         stringCoordinates.append(points.get(0).latLon().lon())
             .append(",")
@@ -76,29 +113,30 @@ public class TripAPI {
                 stringCoordinates.append(";");
             }
         }
-        return stringCoordinates;
+        return stringCoordinates.toString();
     }
 
-    private OsrmResponse getResponse(List<WayPoint> wayPoints, JSONObject json) {
-        try {
-            Files.write(Paths.get("out.json"), json.toString().getBytes());
-        } catch (IOException e) {
-        }
-
+    private OsrmResponse getResponse(List<WayPoint> wayPoints, JSONObject json, String name) {
         var code = json.getString("code");
-        var tripsArray = json.getJSONArray("trips");
+        var tripsArray = json.getJSONArray(name);
         List<LatLon> coordinates = new ArrayList<>();
         final JSONObject trip = tripsArray
             .getJSONObject(0);
         var distance_km = trip.getDouble("distance") / 1000;
-        var arrayOfPoints = trip
-            .getJSONObject("geometry")
-            .getJSONArray("coordinates");
-        for (int i = 0; i < arrayOfPoints.length(); i++) {
-            var lon = arrayOfPoints.getJSONArray(i).getDouble(0);
-            var lat = arrayOfPoints.getJSONArray(i).getDouble(1);
-            coordinates.add(new LatLon(lat, lon));
+        if ("trips".equals(name)) {
+            var arrayOfPoints = trip
+                .getJSONObject("geometry")
+                .getJSONArray("coordinates");
+            for (int i = 0; i < arrayOfPoints.length(); i++) {
+                var lon = arrayOfPoints.getJSONArray(i).getDouble(0);
+                var lat = arrayOfPoints.getJSONArray(i).getDouble(1);
+                coordinates.add(new LatLon(lat, lon));
+            }
         }
         return new OsrmResponse(code, distance_km, coordinates, wayPoints);
+    }
+
+    public void flush() {
+        cache.flush();
     }
 }

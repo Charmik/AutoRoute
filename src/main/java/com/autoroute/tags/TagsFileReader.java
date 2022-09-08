@@ -22,6 +22,9 @@ public class TagsFileReader {
                 Paths.get("config")
                     .resolve(Paths.get("cool_tags.txt")));
         for (String line : lines) {
+            if (line.startsWith("--")) {
+                continue;
+            }
             final String[] split_line = line.split(" ");
             if (split_line.length != 2) {
                 throw new IllegalStateException("tags are not correct: " + line);

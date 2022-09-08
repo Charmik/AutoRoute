@@ -45,6 +45,8 @@ public class OverPassAPI {
         query.append("</union>\n");
         query.append("<print mode=\"meta\"/>\n");
 
+        System.out.println("query:\n" + query);
+
         List<OverpassResponse> responses = new ArrayList<>();
 
         final MapDataWithGeometryHandler handler = new MapDataWithGeometryHandler() {
