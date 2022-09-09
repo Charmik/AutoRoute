@@ -4,8 +4,8 @@ import com.autoroute.Constants;
 import com.autoroute.api.osrm.services.OsrmResponse;
 import com.autoroute.api.osrm.services.TooManyCoordinatesException;
 import com.autoroute.api.osrm.services.TripAPI;
-import com.autoroute.gpx.Duplicate;
 import com.autoroute.gpx.GpxGenerator;
+import com.autoroute.gpx.RouteDuplicateDetector;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
 import io.jenetics.jpx.GPX;
@@ -36,14 +36,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RouteDistanceAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDistanceAlgorithm.class);
-    private static final int MAX_ITERATIONS = 50_000;
+    private static final int MAX_ITERATIONS = 5_000;
     private static final double KM_PER_ONE_NODE = 20;
 
     private final TripAPI tripAPI;
-    private final Duplicate duplicate;
+    private final RouteDuplicateDetector duplicate;
     private int debugIndexCount = 0;
 
-    public RouteDistanceAlgorithm(Duplicate duplicate) {
+    public RouteDistanceAlgorithm(RouteDuplicateDetector duplicate) {
         this.tripAPI = new TripAPI();
         this.duplicate = duplicate;
     }
@@ -55,25 +55,34 @@ public class RouteDistanceAlgorithm {
                                    int threads) {
         final ExecutorService pool = Executors.newFixedThreadPool(threads);
         CompletionService<OsrmResponse> completionService =
-            new ExecutorCompletionService<OsrmResponse>(pool);
+            new ExecutorCompletionService<>(pool);
 
 
         AtomicBoolean completed = new AtomicBoolean(false);
+        // don't need to do it every route
         List<WayPoint> currentWayPoints = filterWayPoints(maxDistance, originalWayPoints, pointVisiter);
         for (int i = 0; i < threads; i++) {
-            completionService.submit(() -> buildRoute(minDistance, maxDistance, currentWayPoints, completed));
+            var threadLocalWayPoints = new ArrayList<>(currentWayPoints);
+            completionService.submit(() -> buildRoute(minDistance, maxDistance, threadLocalWayPoints, completed));
         }
 
         try {
-            var response = completionService.take().get();
-            completed.set(true);
-            pool.awaitTermination(60, TimeUnit.SECONDS);
-            return response;
+            for (int i = 0; i < threads; i++) {
+                var response = completionService.take().get();
+                LOGGER.info("thread: {} got a response: {}", i, response);
+                if (response != null) {
+                    var terminated = pool.awaitTermination(10, TimeUnit.SECONDS);
+                    pool.shutdownNow();
+                    LOGGER.info("terminated pool: {}", terminated);
+                    return response;
+                }
+            }
         } catch (InterruptedException e) {
             return null;
         } catch (ExecutionException e) {
             throw new RuntimeException(e);
         }
+        throw new IllegalStateException("unreachable");
     }
 
     /**
@@ -93,7 +102,7 @@ public class RouteDistanceAlgorithm {
         List<WayPoint> erasedPoints = new ArrayList<>();
         for (int iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
             if (completed.get()) {
-                break;
+                return null;
             }
             try {
                 if (currentWayPoints.size() == 1) {
@@ -104,8 +113,18 @@ public class RouteDistanceAlgorithm {
                     }
                     eraseAndAddRandomPoint(currentWayPoints, erasedPoints);
                 }
-                LOGGER.info("Start generate trip from: " +
-                    currentWayPoints.size() + " removed: " + erasedPoints.size());
+                LOGGER.info("Start generate trip from: {} points, removed: {}, iteration: {}",
+                    currentWayPoints.size(), erasedPoints.size(), iteration);
+                // probably we tried all routes
+                final int pointsTogether = (currentWayPoints.size()) + erasedPoints.size();
+                if (pointsTogether < 50) {
+                    final long routeVariants = (1L << pointsTogether);
+                    if (iteration > routeVariants) {
+                        LOGGER.info("stop building because we tried: {} iterations by: {}. points: {}",
+                            iteration, routeVariants, pointsTogether);
+                        return null;
+                    }
+                }
 
                 OsrmResponse response = tripAPI.generateTrip(currentWayPoints, true);
                 if (response.distance() < minDistance || currentWayPoints.size() == 1) {
@@ -163,6 +182,9 @@ public class RouteDistanceAlgorithm {
                     }
                     FindStats.increment(FindStats.DUPLICATE);
                 } else {
+                    if (!completed.compareAndSet(false, true)) {
+                        return null;
+                    }
                     response = addWaypointsAsManyAsPossible(
                         maxDistance, currentWayPoints, erasedPoints, response);
                     LOGGER.info("Found a route with: " + response.wayPoints().size() + " waypoints!");
@@ -204,11 +226,12 @@ public class RouteDistanceAlgorithm {
         LOGGER.info("Found waypoint close to start. Erase random point. " + debugFileName);
     }
 
+    // TODO: can be done in parallel
     private OsrmResponse addWaypointsAsManyAsPossible(double maxDistance,
                                                       List<WayPoint> currentWayPoints,
                                                       List<WayPoint> erasedPoints,
                                                       OsrmResponse response) throws TooManyCoordinatesException {
-        int maxNodesAdd = (int) (2 * maxDistance / KM_PER_ONE_NODE);
+        int maxNodesAdd = (int) (maxDistance / KM_PER_ONE_NODE);
         LOGGER.info("try to add waypoints to the route with distance: " +
             response.distance() + " maxNodes. Can add more: " + maxNodesAdd);
 
@@ -236,6 +259,7 @@ public class RouteDistanceAlgorithm {
                         break;
                     }
                 } else {
+                    LOGGER.info("couldn't add waypoint, try next one");
                     currentWayPoints.remove(currentWayPoints.size() - 1);
                 }
             } catch (HttpTimeoutException e) {
@@ -340,7 +364,7 @@ public class RouteDistanceAlgorithm {
         assert finishIndex > 1;
         assert finishIndex < points.size();
         for (int i = startIndex; i <= finishIndex; i++) {
-            if (points.get(i).IsCloseInCity(startPoint)) {
+            if (points.get(i).isCloseInCity(startPoint)) {
                 return true;
             }
         }
@@ -357,7 +381,7 @@ public class RouteDistanceAlgorithm {
                 if (Math.abs(i - j) < 500) {
                     continue;
                 }
-                if (points.get(i).IsClosePoint(points.get(j))) {
+                if (points.get(i).isClosePoint(points.get(j))) {
                     count++;
                     break;
                 }

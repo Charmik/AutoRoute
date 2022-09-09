@@ -3,8 +3,8 @@ package com.autoroute;
 import com.autoroute.api.overpass.Box;
 import com.autoroute.api.overpass.OverPassAPI;
 import com.autoroute.api.overpass.OverpassResponse;
-import com.autoroute.gpx.Duplicate;
 import com.autoroute.gpx.GpxGenerator;
+import com.autoroute.gpx.RouteDuplicateDetector;
 import com.autoroute.logistic.PointVisiter;
 import com.autoroute.logistic.RouteDistanceAlgorithm;
 import com.autoroute.osm.LatLon;
@@ -15,7 +15,6 @@ import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -28,103 +27,112 @@ public class Main {
     private static final Logger LOGGER = LogManager.getLogger(Main.class);
 
     private static final int MIN_KM = 50;
-    private static final int MAX_KM = 100;
+    private static final int MAX_KM = 120;
     private static final double DIFF_DEGREE = ((double) MAX_KM / Constants.KM_IN_ONE_DEGREE) / 2;
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         LOGGER.info("Start Main");
 
         for (int i = 0; i < 50; i++) {
+            try {
+                var tagsReader = new TagsFileReader();
+                tagsReader.readTags();
 
-            var tagsReader = new TagsFileReader();
-            tagsReader.readTags();
-
-//            final LatLon startPoint = new LatLon(59.908977, 29.068520); // bor
+                final LatLon startPoint = new LatLon(59.908977, 29.068520); // bor
 //            final LatLon startPoint = new LatLon(35.430590, -83.075770); // summer home
-            final LatLon startPoint = new LatLon(34.687562, 32.961236); // CYPRUS
+//                final LatLon startPoint = new LatLon(34.687562, 32.961236); // CYPRUS
 //            final LatLon startPoint = new LatLon(53.585437, 49.069918); // yagodnoe
 
 
-            final Box box = new Box(
-                startPoint.lat() - DIFF_DEGREE,
-                startPoint.lon() - DIFF_DEGREE,
-                startPoint.lat() + DIFF_DEGREE,
-                startPoint.lon() + DIFF_DEGREE
-            );
+                final Box box = new Box(
+                    startPoint.lat() - DIFF_DEGREE,
+                    startPoint.lon() - DIFF_DEGREE,
+                    startPoint.lat() + DIFF_DEGREE,
+                    startPoint.lon() + DIFF_DEGREE
+                );
 
-            var overPassAPI = new OverPassAPI();
-            final var overpassResponse = overPassAPI.GetNodesInBoxByTags(box, tagsReader.getTags());
+                var overPassAPI = new OverPassAPI();
+                final var overpassResponse = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
 
-            List<WayPoint> wayPoints = new ArrayList<>();
+                List<WayPoint> wayPoints = new ArrayList<>();
 
-            wayPoints.add(new WayPoint(-1, startPoint, "Start")); // bor
+                wayPoints.add(new WayPoint(-1, startPoint, "Start")); // bor
 
-            Map<Tag, Integer> tagToCounterStats = new HashMap<>();
-            StringBuilder debugQuireByIds = new StringBuilder("[out:json][timeout:25];\n");
-            debugQuireByIds.append("(");
-            for (OverpassResponse response : overpassResponse) {
-                var tags = response.tags();
-                // filter only drinking water
-                if (tags.containsKey("natural")) {
-                    if ("spring".equals(tags.get("natural"))) {
-                        boolean is_drinking =
-                            tags.containsKey("drinking_water") && "yes".equals(tags.get("drinking_water"));
-                        if (!is_drinking) {
-                            continue;
+                Map<Tag, Integer> tagToCounterStats = new HashMap<>();
+                StringBuilder debugQuireByIds = new StringBuilder("[out:json][timeout:25];\n");
+                debugQuireByIds.append("(");
+                for (OverpassResponse response : overpassResponse) {
+                    var tags = response.tags();
+                    // filter only drinking water
+                    if (tags.containsKey("natural")) {
+                        if ("spring".equals(tags.get("natural"))) {
+                            boolean is_drinking =
+                                tags.containsKey("drinking_water") && "yes".equals(tags.get("drinking_water"));
+                            if (!is_drinking) {
+                                continue;
+                            }
+                        }
+                    }
+                    debugQuireByIds.append("node(").append(response.id()).append(");");
+                    wayPoints.add(new WayPoint(response.id(), response.latLon(), response.getName()));
+
+
+                    for (Map.Entry<String, String> entry : tags.entrySet()) {
+                        Tag tag = new Tag(entry.getKey(), entry.getValue());
+                        if (tagsReader.getTags().contains(tag)) {
+                            tagToCounterStats.compute(tag, (k, v) -> {
+                                if (v == null) {
+                                    return 1;
+                                } else {
+                                    return v + 1;
+                                }
+                            });
                         }
                     }
                 }
-                debugQuireByIds.append("node(").append(response.id()).append(");");
-                wayPoints.add(new WayPoint(response.id(), response.latLon(), response.getName()));
+                debugQuireByIds.append(");\nout;");
+                LOGGER.info("----------------------------");
+                LOGGER.info("----------------------------");
+                LOGGER.info("debugQuireByIds:\n" + debugQuireByIds);
+                LOGGER.info("found: " + wayPoints.size() + " nodes");
+                tagToCounterStats.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(System.out::println);
 
+                var pointVisiter = new PointVisiter();
+                var duplicate = new RouteDuplicateDetector();
 
-                for (Map.Entry<String, String> entry : tags.entrySet()) {
-                    Tag tag = new Tag(entry.getKey(), entry.getValue());
-                    if (tagsReader.getTags().contains(tag)) {
-                        tagToCounterStats.compute(tag, (k, v) -> {
-                            if (v == null) {
-                                return 1;
-                            } else {
-                                return v + 1;
-                            }
-                        });
-                    }
+                final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate);
+
+                var response = routeDistanceAlgorithm.buildRoute(
+                    MIN_KM, MAX_KM, wayPoints, pointVisiter, 5);
+                routeDistanceAlgorithm.getTripAPI().flush();
+                if (response == null) {
+                    LOGGER.info("got response = null");
+                    break;
                 }
+
+                LOGGER.info("Start visit waypoints from the route");
+                for (WayPoint wayPoint : response.wayPoints()) {
+                    pointVisiter.visit(Constants.DEFAULT_USER, wayPoint);
+                }
+
+                LOGGER.info("Start generate GPX for the route");
+                final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
+                for (WayPoint wayPoint : response.wayPoints()) {
+                    LOGGER.info("https://www.openstreetmap.org/node/" + wayPoint.id());
+                }
+
+                final Path tracksFolder = Paths.get("tracks").resolve(Paths.get(startPoint.toString()));
+                tracksFolder.toFile().mkdirs();
+
+                LOGGER.info("Start reading all tracks");
+                var tracks = RouteDuplicateDetector.readTracks(startPoint);
+                var index = tracks.size() + 1;
+                final Path gpxPath = tracksFolder.resolve(index + ".gpx");
+                LOGGER.info("save a route as: {}", gpxPath);
+                GPX.write(gpx, gpxPath);
+            } catch (Throwable t) {
+                LOGGER.error("couldn't process route with exception: ", t);
             }
-            debugQuireByIds.append(");\nout;");
-            LOGGER.info("----------------------------");
-            LOGGER.info("----------------------------");
-            LOGGER.info("debugQuireByIds:\n" + debugQuireByIds);
-            LOGGER.info("found: " + wayPoints.size() + " nodes");
-            tagToCounterStats.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(System.out::println);
-
-            var pointVisiter = new PointVisiter();
-            var duplicate = new Duplicate();
-
-            final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate);
-
-            var response = routeDistanceAlgorithm.buildRoute(MIN_KM, MAX_KM, wayPoints, pointVisiter, 5);
-            routeDistanceAlgorithm.getTripAPI().flush();
-            if (response == null) {
-                break;
-            }
-
-            for (WayPoint wayPoint : response.wayPoints()) {
-                pointVisiter.visit(Constants.DEFAULT_USER, wayPoint);
-            }
-
-            final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
-            for (WayPoint wayPoint : response.wayPoints()) {
-                LOGGER.info("https://www.openstreetmap.org/node/" + wayPoint.id());
-            }
-
-            final Path tracksFolder = Paths.get("tracks").resolve(Paths.get(startPoint.toString()));
-            tracksFolder.toFile().mkdirs();
-
-            var tracks = Duplicate.readTracks(startPoint);
-            var index = tracks.size() + 1;
-            final Path gpxPath = tracksFolder.resolve(index + ".gpx");
-            GPX.write(gpx, gpxPath);
         }
     }
 }

@@ -56,38 +56,51 @@ public class TripAPI {
                                  String overview, String... additionalParams) throws TooManyCoordinatesException, HttpTimeoutException {
 
         var stringCoordinates = buildStringCoordinates(wayPoints);
-        String url = String.format("http://router.project-osrm.org/" + service + "/v1/" + profile +
+        StringBuilder url = new StringBuilder(String.format("http://router.project-osrm.org/" + service + "/v1/" + profile +
                 "/%s?geometries=geojson&overview=" + overview,
-            stringCoordinates);
+            stringCoordinates));
         for (String additionalParam : additionalParams) {
-            url += "&" + additionalParam;
+            url.append("&").append(additionalParam);
         }
-        final OsrmResponse cacheResult = cache.getOrNull(url);
-        if (cacheResult != null) {
-            return new OsrmResponse(cacheResult.code(), cacheResult.distance(), cacheResult.coordinates(),
-                wayPoints);
+        final String urlStr = url.toString();
+        
+        if (wayPoints.size() == 2) {
+            final OsrmResponse cacheResult = cache.getOrNull(urlStr);
+            if (cacheResult != null) {
+                LOGGER.info("url from cache: {}", urlStr);
+                return new OsrmResponse(cacheResult.code(), cacheResult.distance(), cacheResult.coordinates(),
+                    wayPoints);
+            }
         }
-        LOGGER.info("url: " + url);
+        LOGGER.info("url: {}", urlStr);
 
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI(url))
+                .uri(new URI(urlStr))
                 .header("accept", "application/json")
                 .GET()
                 .timeout(Duration.of(120, ChronoUnit.SECONDS))
                 .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             final String body = response.body();
+            if (body.contains("Too many trip coordinates")) {
+                LOGGER.info("got too many coordinated: {}, try to decrease", wayPoints.size());
+                throw new TooManyCoordinatesException("too many coordinates: " + wayPoints.size());
+            }
+            if (body.contains("You have been temporarily blocked")) {
+                LOGGER.warn("ban because of too many requests");
+                throw new RuntimeException();
+            }
             try {
                 var json = new JSONObject(body);
                 final OsrmResponse result = getResponse(wayPoints, json, name);
-                if (wayPoints.size() < 4) {
-                    cache.write(url, result);
+                if (wayPoints.size() == 2) {
+                    cache.write(urlStr, result);
                 }
                 return result;
             } catch (JSONException e) {
-                LOGGER.info("JSON error, request was: " + request);
-                throw new TooManyCoordinatesException("couldn't parse JSON: " + body, e);
+                LOGGER.warn("JSON error, request was: " + request + "\n" + body);
+                throw new RuntimeException("couldn't parse JSON: " + body, e);
             }
         } catch (HttpTimeoutException e) {
             throw e;

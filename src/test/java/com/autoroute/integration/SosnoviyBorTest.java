@@ -3,8 +3,8 @@ package com.autoroute.integration;
 import com.autoroute.api.overpass.Box;
 import com.autoroute.api.overpass.OverPassAPI;
 import com.autoroute.api.overpass.OverpassResponse;
-import com.autoroute.gpx.Duplicate;
 import com.autoroute.gpx.GpxGenerator;
+import com.autoroute.gpx.RouteDuplicateDetector;
 import com.autoroute.logistic.PointVisiter;
 import com.autoroute.logistic.RouteDistanceAlgorithm;
 import com.autoroute.osm.LatLon;
@@ -31,17 +31,17 @@ public class SosnoviyBorTest {
                     new Tag("historic", "castle"),
                     new Tag("historic", "cannon")
                 );
-                var overPassAPI = new OverPassAPI(tagsReader);
-                final var overpassResponse = overPassAPI.GetNodesInBoxByTags(box, tags);
+                var overPassAPI = new OverPassAPI();
+                final var overpassResponse = overPassAPI.getNodesInBoxByTags(box, tags);
                 List<WayPoint> wayPoints = new ArrayList<>();
                 wayPoints.add(new WayPoint(1, new LatLon(59.908977, 29.068520), "Start"));
                 for (OverpassResponse response : overpassResponse) {
                     wayPoints.add(new WayPoint(1, response.latLon(), response.getName()));
                 }
 
-                var duplicate = new Duplicate();
+                var duplicate = new RouteDuplicateDetector();
                 var response = new RouteDistanceAlgorithm(duplicate)
-                    .buildRoute(150, 200, wayPoints, new PointVisiter());
+                    .buildRoute(150, 200, wayPoints, new PointVisiter(), 1);
 
                 final GPX gpx = GpxGenerator.generate(response.coordinates(), wayPoints);
                 Assertions.assertEquals(1, gpx.getTracks().size());

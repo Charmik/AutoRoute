@@ -8,11 +8,11 @@ public record LatLon(double lat, double lon) implements Serializable {
     private static final double EPS = 0.001;
     private static final double EPS_BIGGER = 0.05;
 
-    public boolean IsClosePoint(LatLon other) {
+    public boolean isClosePoint(LatLon other) {
         return Math.abs(lat - other.lat) < EPS && Math.abs(lon - other.lon) < EPS;
     }
 
-    public boolean IsCloseInCity(LatLon other) {
+    public boolean isCloseInCity(LatLon other) {
         return Math.abs(lat - other.lat) < EPS_BIGGER && Math.abs(lon - other.lon) < EPS_BIGGER;
     }
 

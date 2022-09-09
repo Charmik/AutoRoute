@@ -12,9 +12,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
-public class Duplicate {
+public class RouteDuplicateDetector {
 
-    private static final Logger LOGGER = LogManager.getLogger(Duplicate.class);
+    private static final Logger LOGGER = LogManager.getLogger(RouteDuplicateDetector.class);
 
     public GPX readRoute(Path path) {
         try {
@@ -29,7 +29,7 @@ public class Duplicate {
 
         for (var point1 : points1) {
             for (var point2 : points2) {
-                if (point1.IsClosePoint(point2)) {
+                if (point1.isClosePoint(point2)) {
                     count++;
                     break;
                 }
@@ -86,32 +86,8 @@ public class Duplicate {
             return Files.walk(Paths.get("tracks/").resolve(startPoint.toString()), 1)
                 .filter(e -> e.toString().endsWith(".gpx"))
                 .toList();
-
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
-
-
-    public static void main(String[] args) throws IOException {
-        final Duplicate duplicate = new Duplicate();
-
-        var files = Files.walk(Paths.get("tracks/"), 1).filter(e -> e.toString().endsWith(".gpx")).toList();
-        for (int i = 0; i < files.size(); i++) {
-            for (int j = i + 1; j < files.size(); j++) {
-                var path1 = files.get(i);
-                var path2 = files.get(j);
-                var isDuplicate = duplicate.isDuplicate(
-                    gpxToCoordinates(duplicate.readRoute(path1)),
-                    gpxToCoordinates(duplicate.readRoute(path2)));
-                if (isDuplicate) {
-                    LOGGER.info("path1: " + path1 + " path2: " + path2);
-                }
-            }
-        }
-
-//        var gpx = duplicate.readRoute(Paths.get("tracks").resolve(Paths.get("0.gpx")));
-//        duplicate.isDuplicate(gpx, gpx);
-    }
-
 }

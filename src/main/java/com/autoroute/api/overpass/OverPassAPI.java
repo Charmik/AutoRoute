@@ -32,7 +32,7 @@ public class OverPassAPI {
         this.overpass = new OverpassMapDataApi(connection);
     }
 
-    public List<OverpassResponse> GetNodesInBoxByTags(@NotNull Box box, Set<Tag> tags) {
+    public List<OverpassResponse> getNodesInBoxByTags(@NotNull Box box, Set<Tag> tags) {
         StringBuilder query = new StringBuilder("<union>\n");
         for (Tag tag : tags) {
             query.append("<query type=\"node\">\n");
