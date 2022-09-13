@@ -14,6 +14,7 @@ import com.autoroute.tags.TagsFileReader;
 import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,75 +28,29 @@ public class Main {
     private static final Logger LOGGER = LogManager.getLogger(Main.class);
 
     private static final int MIN_KM = 50;
-    private static final int MAX_KM = 120;
+    private static final int MAX_KM = 100;
     private static final double DIFF_DEGREE = ((double) MAX_KM / Constants.KM_IN_ONE_DEGREE) / 2;
 
     public static void main(String[] args) {
         LOGGER.info("Start Main");
+//        LatLon startPoint = new LatLon(59.908977, 29.068520); // bor
+//        LatLon startPoint = new LatLon(35.430590, -83.075770); // summer home
+//        LatLon startPoint = new LatLon(34.687562, 32.961236); // CYPRUS
+//        LatLon startPoint = new LatLon(53.585437, 49.069918); // yagodnoe
+//        LatLon startPoint = new LatLon(55.610989, 37.603291); // chertanovo
+        LatLon startPoint = new LatLon(36.378029, 33.927040); // Silifke
 
         for (int i = 0; i < 50; i++) {
             try {
                 var tagsReader = new TagsFileReader();
                 tagsReader.readTags();
 
-                final LatLon startPoint = new LatLon(59.908977, 29.068520); // bor
-//            final LatLon startPoint = new LatLon(35.430590, -83.075770); // summer home
-//                final LatLon startPoint = new LatLon(34.687562, 32.961236); // CYPRUS
-//            final LatLon startPoint = new LatLon(53.585437, 49.069918); // yagodnoe
-
-
-                final Box box = new Box(
-                    startPoint.lat() - DIFF_DEGREE,
-                    startPoint.lon() - DIFF_DEGREE,
-                    startPoint.lat() + DIFF_DEGREE,
-                    startPoint.lon() + DIFF_DEGREE
-                );
-
-                var overPassAPI = new OverPassAPI();
-                final var overpassResponse = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
-
-                List<WayPoint> wayPoints = new ArrayList<>();
-
-                wayPoints.add(new WayPoint(-1, startPoint, "Start")); // bor
-
-                Map<Tag, Integer> tagToCounterStats = new HashMap<>();
-                StringBuilder debugQuireByIds = new StringBuilder("[out:json][timeout:25];\n");
-                debugQuireByIds.append("(");
-                for (OverpassResponse response : overpassResponse) {
-                    var tags = response.tags();
-                    // filter only drinking water
-                    if (tags.containsKey("natural")) {
-                        if ("spring".equals(tags.get("natural"))) {
-                            boolean is_drinking =
-                                tags.containsKey("drinking_water") && "yes".equals(tags.get("drinking_water"));
-                            if (!is_drinking) {
-                                continue;
-                            }
-                        }
-                    }
-                    debugQuireByIds.append("node(").append(response.id()).append(");");
-                    wayPoints.add(new WayPoint(response.id(), response.latLon(), response.getName()));
-
-
-                    for (Map.Entry<String, String> entry : tags.entrySet()) {
-                        Tag tag = new Tag(entry.getKey(), entry.getValue());
-                        if (tagsReader.getTags().contains(tag)) {
-                            tagToCounterStats.compute(tag, (k, v) -> {
-                                if (v == null) {
-                                    return 1;
-                                } else {
-                                    return v + 1;
-                                }
-                            });
-                        }
-                    }
+                List<WayPoint> wayPoints = readNodes(startPoint, tagsReader);
+                if (wayPoints.size() > 500) {
+                    LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
+                    tagsReader.readTags("short_list_tags.txt");
+                    wayPoints = readNodes(startPoint, tagsReader);
                 }
-                debugQuireByIds.append(");\nout;");
-                LOGGER.info("----------------------------");
-                LOGGER.info("----------------------------");
-                LOGGER.info("debugQuireByIds:\n" + debugQuireByIds);
-                LOGGER.info("found: " + wayPoints.size() + " nodes");
-                tagToCounterStats.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(System.out::println);
 
                 var pointVisiter = new PointVisiter();
                 var duplicate = new RouteDuplicateDetector();
@@ -134,5 +89,64 @@ public class Main {
                 LOGGER.error("couldn't process route with exception: ", t);
             }
         }
+        LOGGER.info("Finished main");
+    }
+
+    @NotNull
+    private static List<WayPoint> readNodes(LatLon startPoint, TagsFileReader tagsReader) {
+        final Box box = new Box(
+            startPoint.lat() - DIFF_DEGREE,
+            startPoint.lon() - DIFF_DEGREE,
+            startPoint.lat() + DIFF_DEGREE,
+            startPoint.lon() + DIFF_DEGREE
+        );
+
+        var overPassAPI = new OverPassAPI();
+        final var overpassResponse = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
+
+        List<WayPoint> wayPoints = new ArrayList<>();
+
+        wayPoints.add(new WayPoint(-1, startPoint, "Start"));
+
+        Map<Tag, Integer> tagToCounterStats = new HashMap<>();
+        StringBuilder debugQuireByIds = new StringBuilder("[out:json][timeout:120];\n");
+        debugQuireByIds.append("(");
+        for (OverpassResponse response : overpassResponse) {
+            var tags = response.tags();
+            // filter only drinking water
+            if (tags.containsKey("natural")) {
+                if ("spring".equals(tags.get("natural"))) {
+                    boolean is_drinking =
+                        tags.containsKey("drinking_water") && "yes".equals(tags.get("drinking_water"));
+                    if (!is_drinking) {
+                        continue;
+                    }
+                }
+            }
+            debugQuireByIds.append("node(").append(response.id()).append(");");
+            wayPoints.add(new WayPoint(response.id(), response.latLon(), response.getName()));
+
+
+            for (Map.Entry<String, String> entry : tags.entrySet()) {
+                Tag tag = new Tag(entry.getKey(), entry.getValue());
+                if (tagsReader.getTags().contains(tag)) {
+                    tagToCounterStats.compute(tag, (k, v) -> {
+                        if (v == null) {
+                            return 1;
+                        } else {
+                            return v + 1;
+                        }
+                    });
+                }
+            }
+        }
+        debugQuireByIds.append(");\nout;");
+        LOGGER.info("----------------------------");
+        LOGGER.info("----------------------------");
+        LOGGER.info("debugQuireByIds:\n" + debugQuireByIds);
+        LOGGER.info("found: " + wayPoints.size() + " nodes");
+        LOGGER.info("Print Tags sorted by popularity");
+        tagToCounterStats.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(LOGGER::info);
+        return wayPoints;
     }
 }
