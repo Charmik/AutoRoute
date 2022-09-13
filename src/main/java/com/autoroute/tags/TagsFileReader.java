@@ -17,10 +17,15 @@ public class TagsFileReader {
     }
 
     public void readTags() throws IOException {
+        readTags("cool_tags.txt");
+    }
+
+    public void readTags(String fileName) throws IOException {
         var lines =
             Files.readAllLines(
                 Paths.get("config")
-                    .resolve(Paths.get("cool_tags.txt")));
+                    .resolve(Paths.get(fileName)));
+        tags.clear();
         for (String line : lines) {
             if (line.startsWith("--")) {
                 continue;
