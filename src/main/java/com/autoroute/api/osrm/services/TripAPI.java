@@ -70,6 +70,8 @@ public class TripAPI {
                 LOGGER.info("url from cache: {}", urlStr);
                 return new OsrmResponse(cacheResult.code(), cacheResult.distance(), cacheResult.coordinates(),
                     wayPoints);
+            } else {
+                LOGGER.info("route with 2 points not found in cache");
             }
         }
         LOGGER.info("url: {}", urlStr);
@@ -83,7 +85,7 @@ public class TripAPI {
                 .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             final String body = response.body();
-            if (body.contains("Too many trip coordinates")) {
+            if (body.contains("Too many trip coordinates") || body.contains("URI Too Large")) {
                 LOGGER.info("got too many coordinated: {}, try to decrease", wayPoints.size());
                 throw new TooManyCoordinatesException("too many coordinates: " + wayPoints.size());
             }
