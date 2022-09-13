@@ -6,6 +6,7 @@ import com.autoroute.osm.WayPoint;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 
@@ -14,7 +15,9 @@ public class PointVisiter {
     static final String FILE_PATH = "config/visit/";
 
     public void visit(String user, WayPoint newWaypoint) {
-        var file = Paths.get(FILE_PATH).resolve(Paths.get(user + ".txt")).toFile();
+        final Path dirPath = Paths.get(FILE_PATH);
+        dirPath.toFile().mkdirs();
+        var file = dirPath.resolve(Paths.get(user + ".txt")).toFile();
         try {
             if (!file.exists()) {
                 boolean created = file.createNewFile();
