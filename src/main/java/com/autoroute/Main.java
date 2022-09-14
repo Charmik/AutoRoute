@@ -30,6 +30,7 @@ public class Main {
     private static final int MIN_KM = 50;
     private static final int MAX_KM = 100;
     private static final double DIFF_DEGREE = ((double) MAX_KM / Constants.KM_IN_ONE_DEGREE) / 2;
+    private static final double DEFAULT_KM_PER_ONE_NODE = 20;
 
     public static void main(String[] args) {
         LOGGER.info("Start Main");
@@ -40,6 +41,7 @@ public class Main {
 //        LatLon startPoint = new LatLon(55.610989, 37.603291); // chertanovo
         LatLon startPoint = new LatLon(36.378029, 33.927040); // Silifke
 
+        double kmPerNode = DEFAULT_KM_PER_ONE_NODE;
         for (int i = 0; i < 50; i++) {
             try {
                 var tagsReader = new TagsFileReader();
@@ -58,12 +60,13 @@ public class Main {
                 final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate);
 
                 var response = routeDistanceAlgorithm.buildRoute(
-                    MIN_KM, MAX_KM, wayPoints, pointVisiter, 5);
+                    MIN_KM, MAX_KM, wayPoints, kmPerNode, pointVisiter, 5);
                 routeDistanceAlgorithm.getTripAPI().flush();
                 if (response == null) {
                     LOGGER.info("got response = null");
                     break;
                 }
+                kmPerNode = response.kmPerOneNode();
 
                 LOGGER.info("Start visit waypoints from the route");
                 for (WayPoint wayPoint : response.wayPoints()) {

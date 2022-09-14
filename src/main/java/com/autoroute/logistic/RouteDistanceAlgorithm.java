@@ -37,8 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RouteDistanceAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDistanceAlgorithm.class);
-    private static final int MAX_ITERATIONS = 5_000;
-    private static final double KM_PER_ONE_NODE = 20;
+    private static final int MAX_ITERATIONS = 1_000;
 
     // TODO: remove static
     private static final ExecutorService FILTER_NODES_POOL = Executors.newFixedThreadPool(5);
@@ -57,6 +56,7 @@ public class RouteDistanceAlgorithm {
     public OsrmResponse buildRoute(double minDistance,
                                    double maxDistance,
                                    final List<WayPoint> originalWayPoints,
+                                   double kmPerOneNode,
                                    PointVisiter pointVisiter,
                                    int threads) {
         LOGGER.info("Start buildRoute");
@@ -68,7 +68,8 @@ public class RouteDistanceAlgorithm {
         List<WayPoint> currentWayPoints = filterWayPoints(maxDistance, originalWayPoints, pointVisiter);
         for (int i = 0; i < threads; i++) {
             var threadLocalWayPoints = new ArrayList<>(currentWayPoints);
-            completionService.submit(() -> buildRoute(minDistance, maxDistance, threadLocalWayPoints, completed));
+            completionService.submit(() -> buildRoute(
+                minDistance, maxDistance, kmPerOneNode, threadLocalWayPoints, completed));
         }
 
         try {
@@ -97,6 +98,7 @@ public class RouteDistanceAlgorithm {
     @Nullable
     private OsrmResponse buildRoute(double minDistance,
                                     double maxDistance,
+                                    double kmPerOneNode,
                                     final List<WayPoint> currentWayPoints,
                                     AtomicBoolean completed) {
         if (currentWayPoints.size() == 1) {
@@ -104,6 +106,12 @@ public class RouteDistanceAlgorithm {
         }
         List<WayPoint> erasedPoints = new ArrayList<>();
         for (int iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+            if (iteration == MAX_ITERATIONS / 10 || iteration == MAX_ITERATIONS / 5 || iteration == MAX_ITERATIONS / 2) {
+                kmPerOneNode *= 1.5;
+                LOGGER.warn("couldn't build a route for {} iterations. decrease kmPerOneNode to: {},",
+                    iteration, kmPerOneNode);
+            }
+
             if (completed.get()) {
                 return null;
             }
@@ -129,6 +137,7 @@ public class RouteDistanceAlgorithm {
                     }
                 }
 
+                // can we use fast generateTrip without coordinates just for distance and when found a route - use full mode? Is it faster?
                 OsrmResponse response = tripAPI.generateTrip(currentWayPoints, true);
                 if (response.distance() < minDistance || currentWayPoints.size() == 1) {
                     LOGGER.info("got too small distance: " + response.distance() + ", add 1 node");
@@ -140,7 +149,7 @@ public class RouteDistanceAlgorithm {
                     FindStats.increment(FindStats.TOO_SMALL);
                 } else if (response.distance() > maxDistance) {
                     int diffDistance = (int) (response.distance() - maxDistance);
-                    int removeNodesCount = ((int) (diffDistance / KM_PER_ONE_NODE)) + 1;
+                    int removeNodesCount = ((int) (diffDistance / kmPerOneNode)) + 1;
                     if (removeNodesCount > currentWayPoints.size()) {
                         removeNodesCount = (currentWayPoints.size() / 2) + 1;
                     }
@@ -161,7 +170,7 @@ public class RouteDistanceAlgorithm {
                         eraseAndAddRandomPoint(erasedPoints, currentWayPoints);
                     }
                     FindStats.increment(FindStats.TOO_BIG);
-                } else if (response.distance() / response.wayPoints().size() > KM_PER_ONE_NODE) {
+                } else if (response.distance() / response.wayPoints().size() > kmPerOneNode) {
                     LOGGER.info("distance: " + response.distance() +
                         " has only " + response.wayPoints().size() + " nodes. Try to add more nodes");
                     eraseAndAddRandomPoint(currentWayPoints, erasedPoints);
@@ -190,9 +199,9 @@ public class RouteDistanceAlgorithm {
                         return null;
                     }
                     response = addWaypointsAsManyAsPossible(
-                        maxDistance, currentWayPoints, erasedPoints, response);
+                        maxDistance, currentWayPoints, erasedPoints, kmPerOneNode, response);
                     LOGGER.info("Found a route with: " + response.wayPoints().size() + " waypoints!");
-                    return response;
+                    return new OsrmResponse(response, kmPerOneNode);
                 }
 //                saveDebugTrack(response);
                 if (iteration % 10 == 0) {
@@ -235,8 +244,9 @@ public class RouteDistanceAlgorithm {
     private OsrmResponse addWaypointsAsManyAsPossible(double maxDistance,
                                                       List<WayPoint> currentWayPoints,
                                                       List<WayPoint> erasedPoints,
+                                                      double kmPerOneNode,
                                                       OsrmResponse response) throws TooManyCoordinatesException {
-        int maxNodesAdd = (int) (maxDistance / KM_PER_ONE_NODE);
+        int maxNodesAdd = (int) (maxDistance / kmPerOneNode);
         LOGGER.info("try to add waypoints to the route with distance: " +
             response.distance() + " maxNodes. Can add more: " + maxNodesAdd);
 
@@ -395,8 +405,8 @@ public class RouteDistanceAlgorithm {
     }
 
     private boolean hasACycle(List<LatLon> points) {
-        int startIndex = (int) (((double) points.size()) / 100 * 20);
-        int finishIndex = (int) (((double) points.size()) / 100 * 80);
+        int startIndex = (int) (((double) points.size()) / 100 * 10);
+        int finishIndex = (int) (((double) points.size()) / 100 * 90);
 
         int count = 0;
         int eliminate_points = 50;
@@ -430,7 +440,7 @@ public class RouteDistanceAlgorithm {
 
         private static final Map<FindStats, Integer> stats = new HashMap<>();
 
-        public static void increment(FindStats stat) {
+        public static synchronized void increment(FindStats stat) {
             stats.compute(stat, (k, v) -> {
                 if (v == null) {
                     return 1;
@@ -439,7 +449,7 @@ public class RouteDistanceAlgorithm {
             });
         }
 
-        public static void printStats() {
+        public static synchronized void printStats() {
             final FindStats[] values = values();
             for (FindStats value : values) {
                 LOGGER.info(value + " " + stats.get(value));
