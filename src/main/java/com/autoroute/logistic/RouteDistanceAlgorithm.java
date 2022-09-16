@@ -105,10 +105,13 @@ public class RouteDistanceAlgorithm {
             throw new IllegalArgumentException("can't build route without way points");
         }
         List<WayPoint> erasedPoints = new ArrayList<>();
-        for (int iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-            if (iteration == MAX_ITERATIONS / 10 || iteration == MAX_ITERATIONS / 5 || iteration == MAX_ITERATIONS / 2) {
-                kmPerOneNode *= 1.5;
-                LOGGER.warn("couldn't build a route for {} iterations. decrease kmPerOneNode to: {},",
+        for (int iteration = 1; iteration < MAX_ITERATIONS; iteration++) {
+            // every 1/100 iteration we increase kmPerOneNode by X%
+            assert MAX_ITERATIONS >= 100;
+            if (iteration % (MAX_ITERATIONS / (MAX_ITERATIONS / 10)) == 0) {
+                kmPerOneNode *= 1.01;
+                kmPerOneNode = Math.min(kmPerOneNode, maxDistance);
+                LOGGER.warn("couldn't build a route for {} iterations. increase kmPerOneNode to: {},",
                     iteration, kmPerOneNode);
             }
 
@@ -117,12 +120,11 @@ public class RouteDistanceAlgorithm {
             }
             try {
                 if (currentWayPoints.size() == 1) {
-//                    LOGGER.info("Add a new waypoint because we have only start point");
                     if (erasedPoints.isEmpty()) {
                         LOGGER.info("don't have nodes to erase. Exit");
                         return null;
                     }
-                    eraseAndAddRandomPoint(currentWayPoints, erasedPoints);
+                    addToCurrentPoints(currentWayPoints, erasedPoints);
                 }
                 LOGGER.info("Start generate trip from: {} points, removed: {}, iteration: {}",
                     currentWayPoints.size(), erasedPoints.size(), iteration);
@@ -139,17 +141,17 @@ public class RouteDistanceAlgorithm {
 
                 // can we use fast generateTrip without coordinates just for distance and when found a route - use full mode? Is it faster?
                 OsrmResponse response = tripAPI.generateTrip(currentWayPoints, true);
-                if (response.distance() < minDistance || currentWayPoints.size() == 1) {
+                if (response.distance() < minDistance) {
                     LOGGER.info("got too small distance: " + response.distance() + ", add 1 node");
                     if (erasedPoints.isEmpty()) {
                         LOGGER.info("Can't build a route with given waypoints");
                         return null;
                     }
-                    eraseAndAddRandomPoint(currentWayPoints, erasedPoints);
+                    addToCurrentPoints(currentWayPoints, erasedPoints);
                     FindStats.increment(FindStats.TOO_SMALL);
                 } else if (response.distance() > maxDistance) {
                     int diffDistance = (int) (response.distance() - maxDistance);
-                    int removeNodesCount = ((int) (diffDistance / kmPerOneNode)) + 1;
+                    int removeNodesCount = ((int) (diffDistance / kmPerOneNode * 3)) + 1;
                     if (removeNodesCount > currentWayPoints.size()) {
                         removeNodesCount = (currentWayPoints.size() / 2) + 1;
                     }
@@ -167,31 +169,28 @@ public class RouteDistanceAlgorithm {
 //                    }
 
                     for (int i = 0; i < removeNodesCount; i++) {
-                        eraseAndAddRandomPoint(erasedPoints, currentWayPoints);
+                        addToErasedPoints(currentWayPoints, erasedPoints);
                     }
                     FindStats.increment(FindStats.TOO_BIG);
                 } else if (response.distance() / response.wayPoints().size() > kmPerOneNode) {
                     LOGGER.info("distance: " + response.distance() +
                         " has only " + response.wayPoints().size() + " nodes. Try to add more nodes");
-                    eraseAndAddRandomPoint(currentWayPoints, erasedPoints);
+                    addToCurrentPoints(currentWayPoints, erasedPoints);
                     FindStats.increment(FindStats.NOT_ENOUGH_NODES);
                 } else if (hasPointViaStartWaypoint(response.coordinates())) {
-                    LOGGER.info("route has points via Start");
-                    if (currentWayPoints.size() > 2) {
-                        eraseAndAddRandomPoint(erasedPoints, currentWayPoints);
-                    } else {
-                        LOGGER.info("We have only 1 point, so route to there and back. don't remove this point");
-                        eraseAndAddRandomPoint(currentWayPoints, erasedPoints);
-                    }
+                    LOGGER.info("route has points via Start, try to erase a point");
+                    // TODO: more longer path can be not via Start point. Can we just add points here sometimes?
+                    addToErasedPoints(currentWayPoints, erasedPoints);
                     FindStats.increment(FindStats.HAS_START_POINT);
-                } else if (hasACycle(response.coordinates())) {
+                    // don't check cycle if we can't build a route for a long time
+                } else if (kmPerOneNode < maxDistance && hasACycle(response.coordinates())) {
                     LOGGER.info("route has a Cycle");
-                    eraseAndAddRandomPoint(erasedPoints, currentWayPoints);
+                    addToErasedPoints(currentWayPoints, erasedPoints);
                     FindStats.increment(FindStats.HAS_A_CYCLE);
                 } else if (routeIsDuplicate(response)) {
                     LOGGER.info("route is a duplicate. Clear up everything");
                     while (currentWayPoints.size() > 1) {
-                        eraseAndAddRandomPoint(erasedPoints, currentWayPoints);
+                        addToErasedPoints(currentWayPoints, erasedPoints);
                     }
                     FindStats.increment(FindStats.DUPLICATE);
                 } else {
@@ -218,7 +217,7 @@ public class RouteDistanceAlgorithm {
                 int erase = 1;
                 erase += currentWayPoints.size() / 2;
                 for (int i = 0; i < erase; i++) {
-                    eraseAndAddRandomPoint(erasedPoints, currentWayPoints);
+                    addToCurrentPoints(erasedPoints, currentWayPoints);
                 }
                 LOGGER.info("got TooManyCoordinatesException with length: {} erase: {}"
                     , currentWayPoints.size(), erase);
@@ -229,6 +228,7 @@ public class RouteDistanceAlgorithm {
     }
 
     private void saveDebugTrack(OsrmResponse response) {
+        Paths.get("debug").toFile().mkdirs();
         var gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
         final String debugFileName = "debug/" + ((debugIndexCount++) % 50) + ".gpx";
         final Path tmpPath = Paths.get(debugFileName);
@@ -273,7 +273,8 @@ public class RouteDistanceAlgorithm {
                         break;
                     }
                 } else {
-                    LOGGER.info("couldn't add waypoint, try next one: {}/{}", i, erasedShuffle.size());
+                    LOGGER.info("couldn't add waypoint, new distance: {}, try next one: {}/{}",
+                        newResponse.distance(), i, erasedShuffle.size());
                     currentWayPoints.remove(currentWayPoints.size() - 1);
                 }
             } catch (HttpTimeoutException e) {
@@ -304,6 +305,9 @@ public class RouteDistanceAlgorithm {
                         hasClosePoint = true;
                         break;
                     }
+                }
+                if (!hasClosePoint) {
+                    LOGGER.info("filter waypoint because it's far away from the route: {}", wayPoint);
                 }
                 return !hasClosePoint;
             }).toList());
@@ -372,17 +376,24 @@ public class RouteDistanceAlgorithm {
         return result;
     }
 
-    private void eraseAndAddRandomPoint(List<WayPoint> addList, List<WayPoint> removeList) {
-        if (removeList.size() == 1) {
+    private void addToCurrentPoints(List<WayPoint> currentList, List<WayPoint> erasedList) {
+        if (erasedList.isEmpty()) {
             return;
         }
-        assert !removeList.isEmpty();
-        var erasedWayPoint = getRandomAndRemoveFromList(removeList);
-        addList.add(erasedWayPoint);
+        var erasedWayPoint = getRandomAndRemoveFromList(erasedList);
+        currentList.add(erasedWayPoint);
+    }
+
+    private void addToErasedPoints(List<WayPoint> currentList, List<WayPoint> erasedList) {
+        if (currentList.size() == 1) {
+            return;
+        }
+        var erasedWayPoint = getRandomAndRemoveFromList(currentList);
+        erasedList.add(erasedWayPoint);
     }
 
     private WayPoint getRandomAndRemoveFromList(List<WayPoint> points) {
-        var index = ThreadLocalRandom.current().nextInt(points.size() - 1) + 1;
+        var index = ThreadLocalRandom.current().nextInt(points.size());
         var res = points.get(index);
         points.remove(index);
         return res;
@@ -397,7 +408,8 @@ public class RouteDistanceAlgorithm {
         assert finishIndex > 1;
         assert finishIndex < points.size();
         for (int i = startIndex; i <= finishIndex; i++) {
-            if (points.get(i).isCloseInCity(startPoint)) {
+            final LatLon point = points.get(i);
+            if (point.isCloseInCity(startPoint)) {
                 return true;
             }
         }
