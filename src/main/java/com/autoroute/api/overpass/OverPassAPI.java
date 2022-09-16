@@ -102,7 +102,7 @@ public class OverPassAPI {
                 }
             })
             .limitIterationsTo(20)
-            .backoff(Duration.THIRTY_SECONDS, 2, Duration.FIVE_MINUTES)
+            .backoff(Duration.FIVE_SECONDS, 2, Duration.FIVE_MINUTES)
             .run();
         return responses;
     }
