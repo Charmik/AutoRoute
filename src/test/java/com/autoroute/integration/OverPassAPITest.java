@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 class OverPassAPITest {
 
     @Test
-    @Timeout(value = 1, unit = TimeUnit.MINUTES)
+    @Timeout(value = 5, unit = TimeUnit.MINUTES)
     void getThreeNodesInSosnoviyBor() {
         boolean success = false;
         // dirty hack to test API. it fails sometimes because of timeout. Fix when stub-API will be implemented
