@@ -4,16 +4,32 @@ import java.io.Serializable;
 
 public record LatLon(double lat, double lon) implements Serializable {
 
-    //    private static final double EPS = ((double) Constants.KM_IN_ONE_DEGREE) / 100 * 3;
-    private static final double EPS = 0.001;
-    private static final double EPS_BIGGER = 0.05;
-
     public boolean isClosePoint(LatLon other) {
-        return Math.abs(lat - other.lat) < EPS && Math.abs(lon - other.lon) < EPS;
+        double distance = distance(this, other);
+        return distance < 1;
     }
 
     public boolean isCloseInCity(LatLon other) {
-        return Math.abs(lat - other.lat) < EPS_BIGGER && Math.abs(lon - other.lon) < EPS_BIGGER;
+        double distance = distance(this, other);
+        return distance < 5;
+    }
+
+    private double distance(LatLon l1, LatLon l2) {
+        double theta = l1.lon - l2.lon;
+        double dist = Math.sin(deg2rad(l1.lat)) * Math.sin(deg2rad(l2.lat)) + Math.cos(deg2rad(l1.lat)) * Math.cos(deg2rad(l2.lat)) * Math.cos(deg2rad(theta));
+        dist = Math.acos(dist);
+        dist = rad2deg(dist);
+        dist = dist * 60 * 1.1515;
+        dist = dist * 1.609344;
+        return dist;
+    }
+
+    private double deg2rad(double deg) {
+        return (deg * Math.PI / 180.0);
+    }
+
+    private double rad2deg(double rad) {
+        return (rad * 180.0 / Math.PI);
     }
 
     public static LatLon castFromWayPoint(io.jenetics.jpx.WayPoint point) {
