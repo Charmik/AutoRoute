@@ -23,7 +23,7 @@ public class Cache {
     private static final Logger LOGGER = LogManager.getLogger(Cache.class);
     private static final Path CACHE_DIR = Paths.get("config").resolve("cache");
     private static final Path CACHE_FILE = CACHE_DIR.resolve("trip.ser");
-    private static final int CACHE_MAX_SIZE = 1 << 13;
+    private static final int CACHE_MAX_SIZE = 1 << 14;
 
     private LRUCache cache;
 
@@ -52,7 +52,8 @@ public class Cache {
             flush();
         }
         var finish = System.nanoTime();
-        LOGGER.info("loaded cache for: " + ((finish - startLoadCache) / 1_000_000) + " seconds");
+        LOGGER.info("loaded cache for: {} seconds with size: {}",
+            (finish - startLoadCache) / 1_000_000, cache.size());
     }
 
     synchronized OsrmResponse getOrNull(String request) {
