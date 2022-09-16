@@ -39,3 +39,4 @@ build/
 
 logs/**
 config/telegramKey.txt
+src/main/resources/sql.properties

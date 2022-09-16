@@ -11,17 +11,25 @@ import com.autoroute.osm.LatLon;
 import com.autoroute.osm.Tag;
 import com.autoroute.osm.WayPoint;
 import com.autoroute.tags.TagsFileReader;
+import com.autoroute.telegram.Bot;
+import com.autoroute.telegram.db.Database;
+import com.autoroute.telegram.db.Row;
+import com.autoroute.telegram.db.Settings;
+import com.autoroute.telegram.db.State;
 import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 public class Main {
 
@@ -32,66 +40,109 @@ public class Main {
     private static final double DIFF_DEGREE = ((double) MAX_KM / Constants.KM_IN_ONE_DEGREE) / 2;
     private static final double DEFAULT_KM_PER_ONE_NODE = 20;
 
-    public static void main(String[] args) {
-        LOGGER.info("Start Main");
-//        LatLon startPoint = new LatLon(59.908977, 29.068520); // bor
-//        LatLon startPoint = new LatLon(35.430590, -83.075770); // summer home
-//        LatLon startPoint = new LatLon(34.687562, 32.961236); // CYPRUS
-//        LatLon startPoint = new LatLon(53.585437, 49.069918); // yagodnoe
-//        LatLon startPoint = new LatLon(55.610989, 37.603291); // chertanovo
-        LatLon startPoint = new LatLon(36.378029, 33.927040); // Silifke
+    private void run() {
 
-        double kmPerNode = DEFAULT_KM_PER_ONE_NODE;
-        for (int i = 0; i < 50; i++) {
+        Settings sqlSettings = readSqlSettings();
+        final Database db = new Database(sqlSettings);
+        Bot telegramBot = Bot.startBot(db);
+
+
+        for (; ; ) {
             try {
+                double kmPerNode = DEFAULT_KM_PER_ONE_NODE;
                 var tagsReader = new TagsFileReader();
                 tagsReader.readTags();
 
-                List<WayPoint> wayPoints = readNodes(startPoint, tagsReader);
-                if (wayPoints.size() > 500) {
-                    LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
-                    tagsReader.readTags("short_list_tags.txt");
-                    wayPoints = readNodes(startPoint, tagsReader);
+                final List<Row> readyRows = db.getRowsByState(State.SENT_DISTANCE);
+                LOGGER.info("found: {} rows from db", readyRows.size());
+                for (Row readyRow : readyRows) {
+                    LOGGER.info("got a row: {}", readyRow);
+                    final LatLon startPoint = readyRow.startPoint();
+                    List<WayPoint> wayPoints = readNodes(startPoint, tagsReader);
+                    if (wayPoints.size() > 500) {
+                        LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
+                        tagsReader.readTags("short_list_tags.txt");
+                        wayPoints = readNodes(startPoint, tagsReader);
+                    }
+
+                    var pointVisiter = new PointVisiter();
+                    var duplicate = new RouteDuplicateDetector();
+
+                    final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate);
+
+                    var response = routeDistanceAlgorithm.buildRoute(
+                        MIN_KM, MAX_KM, wayPoints, kmPerNode, pointVisiter, 5);
+                    routeDistanceAlgorithm.getTripAPI().flush();
+                    if (response == null) {
+                        LOGGER.info("got response = null for row: {}", readyRow);
+                        Row newRow = new Row(readyRow, State.GOT_ALL_ROUTES);
+                        db.updateRow(newRow);
+                        telegramBot.sendMessage(readyRow.chatId(), "Seems like we couldn't build a route " +
+                            "with your criteria:( Please provide another distances or start point");
+                        break;
+                    }
+                    kmPerNode = response.kmPerOneNode();
+
+                    LOGGER.info("Start visit waypoints from the route");
+                    for (WayPoint wayPoint : response.wayPoints()) {
+                        pointVisiter.visit(Constants.DEFAULT_USER, wayPoint);
+                    }
+
+                    LOGGER.info("Start generate GPX for the route");
+                    final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
+                    for (WayPoint wayPoint : response.wayPoints()) {
+                        LOGGER.info("https://www.openstreetmap.org/node/" + wayPoint.id());
+                    }
+
+                    final Path tracksFolder = Paths.get("tracks").resolve(Paths.get(startPoint.toString()));
+                    tracksFolder.toFile().mkdirs();
+
+                    LOGGER.info("Start reading all tracks");
+                    var tracks = RouteDuplicateDetector.readTracks(startPoint);
+                    var index = tracks.size() + 1;
+                    final Path gpxPath = tracksFolder.resolve(index + ".gpx");
+                    LOGGER.info("save a route as: {}", gpxPath);
+                    GPX.write(gpx, gpxPath);
+
+                    Row newRow = new Row(readyRow, State.GOT_ALL_ROUTES);
+                    db.updateRow(newRow);
+                    telegramBot.sendMessage(readyRow.chatId(),
+                        "Your routes are ready! You can use this site to look at your route: https://gpx.studio/");
+                    telegramBot.sendFile(readyRow.chatId(), gpxPath);
                 }
-
-                var pointVisiter = new PointVisiter();
-                var duplicate = new RouteDuplicateDetector();
-
-                final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate);
-
-                var response = routeDistanceAlgorithm.buildRoute(
-                    MIN_KM, MAX_KM, wayPoints, kmPerNode, pointVisiter, 5);
-                routeDistanceAlgorithm.getTripAPI().flush();
-                if (response == null) {
-                    LOGGER.info("got response = null");
-                    break;
+                if (readyRows.isEmpty()) {
+                    LOGGER.info("didn't find any rows in db, sleeping...");
+                    Thread.sleep(10 * 1000);
                 }
-                kmPerNode = response.kmPerOneNode();
-
-                LOGGER.info("Start visit waypoints from the route");
-                for (WayPoint wayPoint : response.wayPoints()) {
-                    pointVisiter.visit(Constants.DEFAULT_USER, wayPoint);
-                }
-
-                LOGGER.info("Start generate GPX for the route");
-                final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
-                for (WayPoint wayPoint : response.wayPoints()) {
-                    LOGGER.info("https://www.openstreetmap.org/node/" + wayPoint.id());
-                }
-
-                final Path tracksFolder = Paths.get("tracks").resolve(Paths.get(startPoint.toString()));
-                tracksFolder.toFile().mkdirs();
-
-                LOGGER.info("Start reading all tracks");
-                var tracks = RouteDuplicateDetector.readTracks(startPoint);
-                var index = tracks.size() + 1;
-                final Path gpxPath = tracksFolder.resolve(index + ".gpx");
-                LOGGER.info("save a route as: {}", gpxPath);
-                GPX.write(gpx, gpxPath);
-            } catch (Throwable t) {
-                LOGGER.error("couldn't process route with exception: ", t);
+            } catch (Exception e) {
+                LOGGER.error("exception in main: ", e);
             }
         }
+    }
+
+    private Settings readSqlSettings() {
+        try {
+            InputStream iStream = this.getClass().getClassLoader()
+                .getResourceAsStream("sql.properties");
+            if (iStream == null) {
+                throw new RuntimeException("File not found");
+            }
+            Properties properties = new Properties();
+            properties.load(iStream);
+
+            final String url = properties.getProperty("url");
+            final String user = properties.getProperty("user");
+            final String password = properties.getProperty("password");
+            return new Settings(url, user, password);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void main(String[] args) {
+        LOGGER.info("Start Main");
+        Main main = new Main();
+        main.run();
         LOGGER.info("Finished main");
     }
 
