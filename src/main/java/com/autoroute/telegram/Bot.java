@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.Date;
 
 public class Bot extends TelegramLongPollingBot {
 
@@ -31,12 +32,13 @@ public class Bot extends TelegramLongPollingBot {
     private static final String TELEGRAM_KEY;
 
     private static final String SEND_LOCATION_MESSAGE = """
+        This is auto generator of cycling routes over sights. 
         Please send your location in the attachment menu. You can choose any location where you want to start your ride.
         You can forward your old message with location if you want to reuse the old one.""";
 
     private static final String SEND_DISTANCE_MESSAGE = """
         We got your location. Now please provide minimum and maximum distance for your trip via space.
-        Difference between them should be more than 10km. Minimum distance is 20km. 
+        Difference between them should be more than 20km. Minimum distance is 20km. 
         They can't be more than 150km.
         Example: \"50 100\"""";
 
@@ -44,6 +46,7 @@ public class Bot extends TelegramLongPollingBot {
         You sent all information, your routes are in progress. 
         Please be patient for them, it can takes hours for now. 
         Only 1 route will be generated for now, will be fixed later.
+        If you want more routes - just repeat the same data - another route will be generated.
         """;
 
     static {
@@ -75,19 +78,21 @@ public class Bot extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         if (update.hasMessage()) {
             final long chatId = update.getMessage().getChatId();
+            final var msgDate = new Date(update.getMessage().getDate());
             @Nullable final Row dbRow = db.getRow(chatId);
 
             LOGGER.info("got update with chat_id: {}, row: {}", chatId, dbRow);
-            if (dbRow == null || dbRow.state() == State.GOT_ALL_ROUTES) {
-                processStartCommand(chatId, update, dbRow);
+            if (dbRow == null || dbRow.state() == State.GOT_ALL_ROUTES || dbRow.state() == State.FAILED_TO_PROCESS) {
+                processStartCommand(chatId, msgDate, update, dbRow);
             } else {
                 switch (dbRow.state()) {
-                    case CREATED -> processLocationUpdate(dbRow, update);
-                    case SENT_LOCATION -> processDistanceUpdate(dbRow, update);
+                    case CREATED -> processLocationUpdate(dbRow, msgDate, update);
+                    case SENT_LOCATION -> processDistanceUpdate(dbRow, msgDate, update);
                     case SENT_DISTANCE -> sendMessage(chatId, WAITING_FOR_RESULT);
 //                    case GOT_FIRST_PART -> {
 //                        break;
 //                    }
+                    case FAILED_TO_PROCESS -> throw new RuntimeException("UNREACHABLE");
                     case GOT_ALL_ROUTES -> throw new RuntimeException("UNREACHABLE");
                     default -> throw new RuntimeException("UNREACHABLE");
                 }
@@ -95,9 +100,9 @@ public class Bot extends TelegramLongPollingBot {
         }
     }
 
-    private void processStartCommand(long chatId, Update update, Row oldRow) {
+    private void processStartCommand(long chatId, Date msgDate, Update update, Row oldRow) {
         if (update.getMessage().hasText() && "/start".equals(update.getMessage().getText())) {
-            Row row = new Row(chatId, State.CREATED);
+            Row row = new Row(chatId, update.getMessage().getChat().getUserName(), msgDate, State.CREATED);
             if (oldRow == null) {
                 LOGGER.info("insert new row on /start: {}", row);
                 db.insertRow(row);
@@ -111,7 +116,7 @@ public class Bot extends TelegramLongPollingBot {
         }
     }
 
-    private void processLocationUpdate(@NotNull Row dbRow, Update update) {
+    private void processLocationUpdate(@NotNull Row dbRow, Date msgDate, Update update) {
         assert dbRow != null;
         final Long chatId = update.getMessage().getChatId();
         if (!update.getMessage().hasLocation()) {
@@ -121,13 +126,13 @@ public class Bot extends TelegramLongPollingBot {
         final Location location = update.getMessage().getLocation();
         final LatLon latLon = new LatLon(location.getLatitude(), location.getLongitude());
 
-        final Row row = new Row(chatId, State.SENT_LOCATION, latLon);
+        final Row row = new Row(chatId, update.getMessage().getChat().getUserName(), msgDate, State.SENT_LOCATION, latLon);
         assert dbRow.state() == State.CREATED;
         db.updateRow(row);
         sendMessage(chatId, SEND_DISTANCE_MESSAGE);
     }
 
-    private void processDistanceUpdate(@NotNull Row dbRow, Update update) {
+    private void processDistanceUpdate(@NotNull Row dbRow, Date date, Update update) {
         assert dbRow != null;
         final Long chatId = update.getMessage().getChatId();
         if (!update.getMessage().hasText()) {
@@ -148,27 +153,14 @@ public class Bot extends TelegramLongPollingBot {
                 maxDistance > 150) {
                 sendMessage(chatId, SEND_DISTANCE_MESSAGE);
             } else {
-                Row row = new Row(chatId, State.SENT_DISTANCE, dbRow.startPoint(), minDistance, maxDistance);
+                final String userName = update.getMessage().getChat().getUserName();
+                Row row = new Row(chatId, userName, date, State.SENT_DISTANCE, dbRow.startPoint(), minDistance, maxDistance);
                 db.updateRow(row);
                 sendMessage(chatId, WAITING_FOR_RESULT);
             }
         } else {
             sendMessage(chatId, SEND_DISTANCE_MESSAGE);
         }
-    }
-
-
-    private void processTextUpdate(Update update) {
-        final Long chatId = update.getMessage().getChatId();
-        final String userText = update.getMessage().getText();
-
-        final String text;
-        if (userText.startsWith("/start")) {
-            text = "Please send your location in the attachment menu. You can choose any location where you want to start your ride.";
-        } else {
-            text = "Unknown command, please use /start to run the bot.";
-        }
-        sendMessage(chatId, text);
     }
 
     public void sendMessage(long chatId, String strMessage) {
