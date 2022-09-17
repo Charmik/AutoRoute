@@ -26,12 +26,13 @@ import java.util.List;
 public class TripAPI {
 
     private static final Logger LOGGER = LogManager.getLogger(TripAPI.class);
+    private static final int TIMEOUT_SECONDS = 120;
 
     private final HttpClient client;
     private final Cache cache;
 
     public TripAPI() {
-        this.client = HttpClient.newHttpClient();
+        this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS)).build();
         this.cache = new Cache();
         this.cache.loadCache();
     }
@@ -81,7 +82,7 @@ public class TripAPI {
                 .uri(new URI(urlStr))
                 .header("accept", "application/json")
                 .GET()
-                .timeout(Duration.of(120, ChronoUnit.SECONDS))
+                .timeout(Duration.of(TIMEOUT_SECONDS, ChronoUnit.SECONDS))
                 .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             final String body = response.body();
