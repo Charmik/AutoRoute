@@ -1,5 +1,7 @@
 package com.autoroute;
 
+import java.sql.Date;
+
 public class Utils {
 
     public static Integer parseInteger(String str) {
@@ -8,6 +10,10 @@ public class Utils {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    public static Date SQLnow() {
+        return new Date(System.currentTimeMillis());
     }
 
 }

@@ -25,7 +25,7 @@ public class PointVisiter {
                     throw new RuntimeException("couldn't create a file: " + file.getAbsolutePath());
                 }
             }
-            boolean visitedAlready = isVisited(file, user, newWaypoint);
+            boolean visitedAlready = isVisited(file, newWaypoint);
             if (!visitedAlready) {
                 String writeLine = newWaypoint.id() + " " +
                     newWaypoint.latLon().lat() + " " +
@@ -43,13 +43,13 @@ public class PointVisiter {
             return false;
         }
         try {
-            return isVisited(file, user, waypoint);
+            return isVisited(file, waypoint);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private boolean isVisited(File file, String user, WayPoint newWaypoint) throws IOException {
+    private boolean isVisited(File file, WayPoint newWaypoint) throws IOException {
         return Files.readAllLines(file.toPath())
             .stream()
             .map(line -> {

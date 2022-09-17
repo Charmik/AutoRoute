@@ -6,6 +6,7 @@ public enum State {
     SENT_LOCATION(10),
     SENT_DISTANCE(20),
     //    GOT_FIRST_PART(30),
+    FAILED_TO_PROCESS(35),
     GOT_ALL_ROUTES(40);
 
     private static final State[] VALUES = values();

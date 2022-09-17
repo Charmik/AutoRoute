@@ -1,6 +1,5 @@
 package com.autoroute.logistic;
 
-import com.autoroute.Constants;
 import com.autoroute.api.osrm.services.OsrmResponse;
 import com.autoroute.api.osrm.services.TooManyCoordinatesException;
 import com.autoroute.api.osrm.services.TripAPI;
@@ -37,7 +36,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RouteDistanceAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDistanceAlgorithm.class);
-    private static final int MAX_ITERATIONS = 1_000;
+    private static final int MAX_ITERATIONS = 100;
+    private static final int ITERATION_DIVIDER = MAX_ITERATIONS / 100;
 
     // TODO: remove static
     private static final ExecutorService FILTER_NODES_POOL = Executors.newFixedThreadPool(5);
@@ -45,9 +45,11 @@ public class RouteDistanceAlgorithm {
 
     private final TripAPI tripAPI;
     private final RouteDuplicateDetector duplicate;
+    private final String user; // TODO: delete this field and move logic inside PointVisitor
     private int debugIndexCount = 0;
 
-    public RouteDistanceAlgorithm(RouteDuplicateDetector duplicate) {
+    public RouteDistanceAlgorithm(RouteDuplicateDetector duplicate, String user) {
+        this.user = user;
         this.tripAPI = new TripAPI();
         this.duplicate = duplicate;
     }
@@ -75,7 +77,8 @@ public class RouteDistanceAlgorithm {
         try {
             for (int i = 0; i < threads; i++) {
                 var response = completionService.take().get();
-                LOGGER.info("thread: {} got response is null: {}", i, response == null);
+                LOGGER.info("thread: {} got response is null: {}",
+                    i, response == null);
                 if (response != null) {
                     return response;
                 }
@@ -105,13 +108,17 @@ public class RouteDistanceAlgorithm {
             throw new IllegalArgumentException("can't build route without way points");
         }
         List<WayPoint> erasedPoints = new ArrayList<>();
+        while (currentWayPoints.size() > 1) {
+            erasedPoints.add(currentWayPoints.get(currentWayPoints.size() - 1));
+            currentWayPoints.remove(currentWayPoints.size() - 1);
+        }
         for (int iteration = 1; iteration < MAX_ITERATIONS; iteration++) {
             // every 1/100 iteration we increase kmPerOneNode by X%
             assert MAX_ITERATIONS >= 100;
-            if (iteration % (MAX_ITERATIONS / (MAX_ITERATIONS / 10)) == 0) {
-                kmPerOneNode *= 1.01;
+            if (iteration % (MAX_ITERATIONS / (MAX_ITERATIONS / ITERATION_DIVIDER)) == 0) {
+                kmPerOneNode *= 1.03;
                 kmPerOneNode = Math.min(kmPerOneNode, maxDistance);
-                LOGGER.warn("couldn't build a route for {} iterations. increase kmPerOneNode to: {},",
+                LOGGER.info("couldn't build a route for {} iterations. increase kmPerOneNode to: {},",
                     iteration, kmPerOneNode);
             }
 
@@ -247,24 +254,32 @@ public class RouteDistanceAlgorithm {
                                                       double kmPerOneNode,
                                                       OsrmResponse response) throws TooManyCoordinatesException {
         int maxNodesAdd = (int) (maxDistance / kmPerOneNode);
-        LOGGER.info("try to add waypoints to the route with distance: " +
-            response.distance() + " maxNodes. Can add more: " + maxNodesAdd);
+        LOGGER.info("try to add waypoints to the route with distance: {}. Current waypoints: {}. Can add more: {}",
+            response.distance(), currentWayPoints.size(), maxNodesAdd);
 
         ArrayList<WayPoint> erasedShuffle = filterErasedPoints(erasedPoints, response);
 
         int count = 0;
         for (int i = 0; i < erasedShuffle.size(); i++) {
+
+            final double currentDistance = response.distance();
+            if (currentDistance > maxDistance / 100 * 95) {
+                LOGGER.info("we got 95% of maximum distance, don't tru to add more WayPoints. Current distance: {}",
+                    currentDistance);
+                return response;
+            }
             WayPoint erasedPoint = erasedShuffle.get(i);
             currentWayPoints.add(erasedPoint);
             try {
                 OsrmResponse newResponse = tripAPI.generateTrip(currentWayPoints, true);
-                var distanceDiff = newResponse.distance() - response.distance();
+                var distanceDiff = newResponse.distance() - currentDistance;
                 if (newResponse.distance() < maxDistance && (distanceDiff < maxDistance / 100 * 2)) {
                     response = newResponse;
-                    LOGGER.info("added waypoint to the route, new distance: {}, {}/{}",
-                        newResponse.distance(), i, erasedShuffle.size());
+                    LOGGER.info("added waypoint to the route, current distance: {}, new distance: {}, " +
+                            " max distance: {}, {}/{}",
+                        currentDistance, newResponse.distance(), maxDistance, i, erasedShuffle.size());
                     count++;
-                    if (response.distance() > maxDistance / 100 * 95) {
+                    if (currentDistance > maxDistance / 100 * 95) {
                         LOGGER.info("got enough distance, so break adding waypoints");
                         break;
                     }
@@ -273,8 +288,8 @@ public class RouteDistanceAlgorithm {
                         break;
                     }
                 } else {
-                    LOGGER.info("couldn't add waypoint, new distance: {}, try next one: {}/{}",
-                        newResponse.distance(), i, erasedShuffle.size());
+                    LOGGER.info("couldn't add waypoint, current distance: {}, new distance: {}, try next one: {}/{}",
+                        currentDistance, newResponse.distance(), i, erasedShuffle.size());
                     currentWayPoints.remove(currentWayPoints.size() - 1);
                 }
             } catch (HttpTimeoutException e) {
@@ -328,7 +343,7 @@ public class RouteDistanceAlgorithm {
         LOGGER.info("Start filtering waypoints");
         var filteredPoints = new ArrayList<>(originalWayPoints.stream()
             .skip(1)
-            .filter(point -> !pointVisiter.isVisited(Constants.DEFAULT_USER, point))
+            .filter(point -> !pointVisiter.isVisited(user, point))
             .toList());
         filteredPoints.add(0, originalWayPoints.get(0));
 
@@ -477,7 +492,7 @@ public class RouteDistanceAlgorithm {
             .map(point -> new LatLon(point.getLatitude().doubleValue(), point.getLongitude().doubleValue()))
             .toList();
         System.out.println("size: " + latLons.size());
-        final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(null);
+        final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(null, "charm");
         final boolean b = routeDistanceAlgorithm.hasACycle(latLons);
         System.out.println(b);
     }

@@ -30,7 +30,7 @@ public class OverPassAPI {
         "https://overpass-api.de/api/",
         "https://overpass.kumi.systems/api/",
         "http://overpass.openstreetmap.ru/cgi/",
-        "https://overpass.openstreetmap.fr/api/"
+//        "https://overpass.openstreetmap.fr/api/",
     };
 
     public OverPassAPI() {

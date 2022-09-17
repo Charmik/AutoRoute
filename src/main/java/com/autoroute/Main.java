@@ -34,10 +34,6 @@ import java.util.Properties;
 public class Main {
 
     private static final Logger LOGGER = LogManager.getLogger(Main.class);
-
-    private static final int MIN_KM = 50;
-    private static final int MAX_KM = 100;
-    private static final double DIFF_DEGREE = ((double) MAX_KM / Constants.KM_IN_ONE_DEGREE) / 2;
     private static final double DEFAULT_KM_PER_ONE_NODE = 20;
 
     private void run() {
@@ -49,43 +45,47 @@ public class Main {
 
         for (; ; ) {
             try {
-                double kmPerNode = DEFAULT_KM_PER_ONE_NODE;
                 var tagsReader = new TagsFileReader();
                 tagsReader.readTags();
 
-                final List<Row> readyRows = db.getRowsByState(State.SENT_DISTANCE);
+                // TODO: sort by datetime
+                final List<Row> readyRows = db.getRowsByStateSortedByDate(State.SENT_DISTANCE);
                 LOGGER.info("found: {} rows from db", readyRows.size());
-                for (Row readyRow : readyRows) {
-                    LOGGER.info("got a row: {}", readyRow);
-                    final LatLon startPoint = readyRow.startPoint();
-                    List<WayPoint> wayPoints = readNodes(startPoint, tagsReader);
+                for (Row dbRow : readyRows) {
+                    double kmPerNode = DEFAULT_KM_PER_ONE_NODE;
+                    LOGGER.info("got a row: {}", dbRow);
+                    final LatLon startPoint = dbRow.startPoint();
+                    List<WayPoint> wayPoints = readNodes(startPoint, tagsReader, dbRow);
                     if (wayPoints.size() > 500) {
                         LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
                         tagsReader.readTags("short_list_tags.txt");
-                        wayPoints = readNodes(startPoint, tagsReader);
+                        wayPoints = readNodes(startPoint, tagsReader, dbRow);
                     }
 
+                    final String user = String.valueOf(dbRow.id());
                     var pointVisiter = new PointVisiter();
                     var duplicate = new RouteDuplicateDetector();
 
-                    final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate);
+                    final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate, user);
 
                     var response = routeDistanceAlgorithm.buildRoute(
-                        MIN_KM, MAX_KM, wayPoints, kmPerNode, pointVisiter, 5);
+                        dbRow.minDistance(), dbRow.maxDistance(), wayPoints, kmPerNode, pointVisiter, 5);
                     routeDistanceAlgorithm.getTripAPI().flush();
+                    final long chatId = dbRow.chatId();
                     if (response == null) {
-                        LOGGER.info("got response = null for row: {}", readyRow);
-                        Row newRow = new Row(readyRow, State.GOT_ALL_ROUTES);
+                        LOGGER.info("got response = null for row: {}", dbRow);
+                        Row newRow = new Row(dbRow, State.FAILED_TO_PROCESS);
                         db.updateRow(newRow);
-                        telegramBot.sendMessage(readyRow.chatId(), "Seems like we couldn't build a route " +
+                        telegramBot.sendMessage(chatId, "Seems like we couldn't build a route " +
                             "with your criteria:( Please provide another distances or start point");
                         break;
                     }
                     kmPerNode = response.kmPerOneNode();
 
                     LOGGER.info("Start visit waypoints from the route");
+
                     for (WayPoint wayPoint : response.wayPoints()) {
-                        pointVisiter.visit(Constants.DEFAULT_USER, wayPoint);
+                        pointVisiter.visit(user, wayPoint);
                     }
 
                     LOGGER.info("Start generate GPX for the route");
@@ -104,11 +104,12 @@ public class Main {
                     LOGGER.info("save a route as: {}", gpxPath);
                     GPX.write(gpx, gpxPath);
 
-                    Row newRow = new Row(readyRow, State.GOT_ALL_ROUTES);
+                    Row newRow = new Row(dbRow, State.GOT_ALL_ROUTES);
                     db.updateRow(newRow);
-                    telegramBot.sendMessage(readyRow.chatId(),
-                        "Your routes are ready! You can use this site to look at your route: https://gpx.studio/");
-                    telegramBot.sendFile(readyRow.chatId(), gpxPath);
+                    telegramBot.sendMessage(chatId,
+                        "Your routes are ready! You can use this site to look at your route: https://gpx.studio/.\n" +
+                            "You need to download generated .gpx file and load it on the site: Load GPX");
+                    telegramBot.sendFile(chatId, gpxPath);
                 }
                 if (readyRows.isEmpty()) {
                     LOGGER.info("didn't find any rows in db, sleeping...");
@@ -116,6 +117,9 @@ public class Main {
                 }
             } catch (Exception e) {
                 LOGGER.error("exception in main: ", e);
+            } catch (OutOfMemoryError oom) {
+                LOGGER.error("got OOM in main: ", oom);
+                System.exit(2);
             }
         }
     }
@@ -141,18 +145,22 @@ public class Main {
 
     public static void main(String[] args) {
         LOGGER.info("Start Main");
-        Main main = new Main();
-        main.run();
-        LOGGER.info("Finished main");
+        try {
+            Main main = new Main();
+            main.run();
+        } finally {
+            LOGGER.info("Finished main");
+        }
     }
 
     @NotNull
-    private static List<WayPoint> readNodes(LatLon startPoint, TagsFileReader tagsReader) {
+    private static List<WayPoint> readNodes(LatLon startPoint, TagsFileReader tagsReader, Row readyRow) {
+        double diffDegree = ((double) readyRow.maxDistance() / Constants.KM_IN_ONE_DEGREE) / 2;
         final Box box = new Box(
-            startPoint.lat() - DIFF_DEGREE,
-            startPoint.lon() - DIFF_DEGREE,
-            startPoint.lat() + DIFF_DEGREE,
-            startPoint.lon() + DIFF_DEGREE
+            startPoint.lat() - diffDegree,
+            startPoint.lon() - diffDegree,
+            startPoint.lat() + diffDegree,
+            startPoint.lon() + diffDegree
         );
 
         var overPassAPI = new OverPassAPI();

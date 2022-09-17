@@ -44,7 +44,7 @@ public class SosnoviyBorTest {
 
 
                 var duplicate = new RouteDuplicateDetector();
-                var response = new RouteDistanceAlgorithm(duplicate)
+                var response = new RouteDistanceAlgorithm(duplicate, "charm")
                     .buildRoute(150, 200, wayPoints, 500, new PointVisiter(), 1);
                 if (response == null) {
                     continue;

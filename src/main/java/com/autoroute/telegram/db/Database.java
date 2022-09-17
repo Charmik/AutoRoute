@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -32,6 +33,8 @@ public class Database {
             CREATE TABLE IF NOT EXISTS telegram (
             id SERIAL,
             chat_id BIGINT PRIMARY KEY,
+            user_name TEXT NOT NULL,
+            date bigint NOT NULL,
             state INT NOT NULL,
             lat decimal,
             lon decimal,
@@ -40,15 +43,15 @@ public class Database {
             );""";
 
     private static final String INSERT_ROW = """
-        INSERT INTO telegram(chat_id, state, lat, lon, min_distance, max_distance)  
-        VALUES(?,?,?,?,?,?)""";
+        INSERT INTO telegram(chat_id, user_name, date, state, lat, lon, min_distance, max_distance)  
+        VALUES(?,?,?,?,?,?,?,?)""";
 
     private static final String SELECT_ROW_BY_CHAT_ID = "SELECT * from telegram where chat_id = ?";
-    private static final String SELECT_ROW_STATE = "SELECT * from telegram where state = ?";
+    private static final String SELECT_ROW_STATE = "SELECT * from telegram where state = ? ORDER BY date";
 
     private static final String UPDATE_ROW_BY_CHAT_ID =
         """
-                UPDATE telegram SET state=?, lat=?, lon=?, min_distance=?, max_distance=? WHERE chat_id = ?;
+                UPDATE telegram SET date=?, state=?, lat=?, lon=?, min_distance=?, max_distance=? WHERE chat_id = ?;
             """;
 
     private Connection connect() {
@@ -74,27 +77,29 @@ public class Database {
         try {
             PreparedStatement pstmt = connection.prepareStatement(INSERT_ROW, Statement.RETURN_GENERATED_KEYS);
             pstmt.setLong(1, row.chatId());
-            pstmt.setInt(2, row.state().getIndex());
+            pstmt.setString(2, row.userName());
+            pstmt.setLong(3, row.date().getTime());
+            pstmt.setInt(4, row.state().getIndex());
             double lat = 0;
             double lon = 0;
             if (row.startPoint() != null) {
                 lat = row.startPoint().lat();
                 lon = row.startPoint().lon();
             }
-            pstmt.setDouble(3, lat);
-            pstmt.setDouble(4, lon);
+            pstmt.setDouble(5, lat);
+            pstmt.setDouble(6, lon);
 
             int minDistance = 0;
             if (row.minDistance() != null) {
                 minDistance = row.minDistance();
             }
-            pstmt.setInt(5, minDistance);
+            pstmt.setInt(7, minDistance);
 
             int maxDistance = 0;
             if (row.minDistance() != null) {
                 maxDistance = row.maxDistance();
             }
-            pstmt.setInt(6, maxDistance);
+            pstmt.setInt(8, maxDistance);
             pstmt.executeUpdate();
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -111,10 +116,12 @@ public class Database {
                 Row row = new Row(
                     rs.getLong(1),
                     rs.getLong(2),
-                    State.byIndex(rs.getInt(3)),
-                    new LatLon(rs.getDouble(4), rs.getDouble(5)),
-                    rs.getInt(6),
-                    rs.getInt(7)
+                    rs.getString(3),
+                    new Date(rs.getLong(4)),
+                    State.byIndex(rs.getInt(5)),
+                    new LatLon(rs.getDouble(6), rs.getDouble(7)),
+                    rs.getInt(8),
+                    rs.getInt(9)
                 );
                 return row;
             } else {
@@ -128,7 +135,8 @@ public class Database {
 
     public void updateRow(Row row) {
         try (PreparedStatement pstmt = connection.prepareStatement(UPDATE_ROW_BY_CHAT_ID)) {
-            pstmt.setInt(1, row.state().getIndex());
+            pstmt.setLong(1, row.date().getTime());
+            pstmt.setInt(2, row.state().getIndex());
 
             double lat = 0;
             double lon = 0;
@@ -136,28 +144,28 @@ public class Database {
                 lat = row.startPoint().lat();
                 lon = row.startPoint().lon();
             }
-            pstmt.setDouble(2, lat);
-            pstmt.setDouble(3, lon);
+            pstmt.setDouble(3, lat);
+            pstmt.setDouble(4, lon);
 
             int minDistance = 0;
             if (row.minDistance() != null) {
                 minDistance = row.minDistance();
             }
-            pstmt.setInt(4, minDistance);
+            pstmt.setInt(5, minDistance);
 
             int maxDistance = 0;
             if (row.maxDistance() != null) {
                 maxDistance = row.maxDistance();
             }
-            pstmt.setInt(5, maxDistance);
-            pstmt.setLong(6, row.chatId());
+            pstmt.setInt(6, maxDistance);
+            pstmt.setLong(7, row.chatId());
             pstmt.execute();
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public List<Row> getRowsByState(State state) {
+    public List<Row> getRowsByStateSortedByDate(State state) {
         try (PreparedStatement pstmt = connection.prepareStatement(SELECT_ROW_STATE)) {
 
             pstmt.setInt(1, state.getIndex());
@@ -168,10 +176,12 @@ public class Database {
                 Row row = new Row(
                     rs.getLong(1),
                     rs.getLong(2),
-                    State.byIndex(rs.getInt(3)),
-                    new LatLon(rs.getDouble(4), rs.getDouble(5)),
-                    rs.getInt(6),
-                    rs.getInt(7)
+                    rs.getString(3),
+                    new Date(rs.getLong(4)),
+                    State.byIndex(rs.getInt(5)),
+                    new LatLon(rs.getDouble(6), rs.getDouble(7)),
+                    rs.getInt(8),
+                    rs.getInt(9)
                 );
                 rows.add(row);
             }
