@@ -23,7 +23,7 @@ public class Cache {
     private static final Logger LOGGER = LogManager.getLogger(Cache.class);
     private static final Path CACHE_DIR = Paths.get("config").resolve("cache");
     private static final Path CACHE_FILE = CACHE_DIR.resolve("trip.ser");
-    private static final int CACHE_MAX_SIZE = 1 << 14;
+    private static final int CACHE_MAX_SIZE = 1 << 13;
 
     private LRUCache cache;
 
