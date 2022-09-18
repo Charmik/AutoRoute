@@ -6,7 +6,6 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.sql.Connection;
-import java.sql.Date;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -78,7 +77,7 @@ public class Database {
             PreparedStatement pstmt = connection.prepareStatement(INSERT_ROW, Statement.RETURN_GENERATED_KEYS);
             pstmt.setLong(1, row.chatId());
             pstmt.setString(2, row.userName());
-            pstmt.setLong(3, row.date().getTime());
+            pstmt.setLong(3, row.date());
             pstmt.setInt(4, row.state().getIndex());
             double lat = 0;
             double lon = 0;
@@ -117,7 +116,7 @@ public class Database {
                     rs.getLong(1),
                     rs.getLong(2),
                     rs.getString(3),
-                    new Date(rs.getLong(4)),
+                    rs.getLong(4),
                     State.byIndex(rs.getInt(5)),
                     new LatLon(rs.getDouble(6), rs.getDouble(7)),
                     rs.getInt(8),
@@ -135,7 +134,7 @@ public class Database {
 
     public void updateRow(Row row) {
         try (PreparedStatement pstmt = connection.prepareStatement(UPDATE_ROW_BY_CHAT_ID)) {
-            pstmt.setLong(1, row.date().getTime());
+            pstmt.setLong(1, row.date());
             pstmt.setInt(2, row.state().getIndex());
 
             double lat = 0;
@@ -177,7 +176,7 @@ public class Database {
                     rs.getLong(1),
                     rs.getLong(2),
                     rs.getString(3),
-                    new Date(rs.getLong(4)),
+                    rs.getLong(4),
                     State.byIndex(rs.getInt(5)),
                     new LatLon(rs.getDouble(6), rs.getDouble(7)),
                     rs.getInt(8),

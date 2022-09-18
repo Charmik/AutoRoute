@@ -1,6 +1,5 @@
 package com.autoroute.telegram.db;
 
-import com.autoroute.Utils;
 import com.autoroute.osm.LatLon;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -9,7 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.JdbcDatabaseContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 
-import java.sql.Date;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -44,7 +42,7 @@ class DatabaseTest {
 
     private Row createDefaultRow() {
         return new Row(
-            15, "charm", Utils.SQLnow(), State.SENT_LOCATION, new LatLon(13.2, 14.5), 1, 2);
+            15, "charm", 15, State.SENT_LOCATION, new LatLon(13.2, 14.5), 1, 2);
     }
 
     @Test
@@ -60,7 +58,7 @@ class DatabaseTest {
     void insertTwoRows() {
         Assertions.assertNull(db.getRow(15));
         final Row r1 = createDefaultRow();
-        final Row r2 = new Row(16, "charm", Utils.SQLnow(), State.SENT_LOCATION, new LatLon(13.2, 14.5), 1, 2);
+        final Row r2 = new Row(16, "charm", 15, State.SENT_LOCATION, new LatLon(13.2, 14.5), 1, 2);
         db.insertRow(r1);
         db.insertRow(r2);
     }
@@ -80,9 +78,9 @@ class DatabaseTest {
 
     @Test
     void updateRow() {
-        final Row r1 = new Row(15, "charm", Utils.SQLnow(), State.SENT_LOCATION, new LatLon(13.2, 14.5), 1, 2);
+        final Row r1 = new Row(15, "charm", 15, State.SENT_LOCATION, new LatLon(13.2, 14.5), 1, 2);
         db.insertRow(r1);
-        final Row r2 = new Row(r1.chatId(), "charm", Utils.SQLnow(), State.GOT_ALL_ROUTES, new LatLon(5, 10), 1, 2);
+        final Row r2 = new Row(r1.chatId(), "charm", 15, State.GOT_ALL_ROUTES, new LatLon(5, 10), 1, 2);
         db.updateRow(r2);
         final Row r3 = db.getRow(15);
         Assertions.assertEquals(r2, r3);
@@ -90,10 +88,10 @@ class DatabaseTest {
 
     @Test
     void getRowsByState() {
-        final Row r1 = new Row(1, "charm", Utils.SQLnow(), State.CREATED, new LatLon(1, 1), 1, 2);
-        final Row r2 = new Row(2, "charm", Utils.SQLnow(), State.CREATED, new LatLon(2, 2), 2, 3);
-        final Row r3 = new Row(3, "charm", Utils.SQLnow(), State.SENT_LOCATION, new LatLon(3, 3), 3, 4);
-        final Row r4 = new Row(4, "charm", Utils.SQLnow(), State.SENT_LOCATION, new LatLon(4, 4), 4, 5);
+        final Row r1 = new Row(1, "charm", 15, State.CREATED, new LatLon(1, 1), 1, 2);
+        final Row r2 = new Row(2, "charm", 15, State.CREATED, new LatLon(2, 2), 2, 3);
+        final Row r3 = new Row(3, "charm", 15, State.SENT_LOCATION, new LatLon(3, 3), 3, 4);
+        final Row r4 = new Row(4, "charm", 15, State.SENT_LOCATION, new LatLon(4, 4), 4, 5);
 
         db.insertRow(r1);
         db.insertRow(r2);
@@ -119,8 +117,7 @@ class DatabaseTest {
         List<Row> list = new ArrayList<>();
         int n = 100;
         for (int i = 0; i < n; i++) {
-            final Date date = new Date(i);
-            Row r = new Row(i, "charm", date, State.CREATED, new LatLon(1, 1), 1, 2);
+            Row r = new Row(i, "charm", i, State.CREATED, new LatLon(1, 1), 1, 2);
             list.add(r);
         }
         Collections.shuffle(list);
@@ -129,8 +126,7 @@ class DatabaseTest {
         }
         final List<Row> listFromDB = db.getRowsByStateSortedByDate(State.CREATED);
         for (int i = 0; i < n; i++) {
-            final Date date = listFromDB.get(i).date();
-            final long timeStamp = date.getTime();
+            final long timeStamp = listFromDB.get(i).date();
             Assertions.assertEquals(i, timeStamp);
         }
     }

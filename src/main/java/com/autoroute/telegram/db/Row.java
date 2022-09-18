@@ -5,27 +5,35 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public record Row(@Nullable Long id, long chatId, String userName, java.sql.Date date, State state, LatLon startPoint,
+public record Row(@Nullable Long id, long chatId, String userName, long date, State state, LatLon startPoint,
                   Integer minDistance,
                   Integer maxDistance) {
 
-    public Row(long chatId, String userName, java.sql.Date date, State state, LatLon startPoint, Integer minDistance, Integer maxDistance) {
+    public Row(long chatId, String userName, long date, State state, LatLon startPoint, Integer minDistance, Integer maxDistance) {
         this(null, chatId, userName, date, state, startPoint, minDistance, maxDistance);
         if (minDistance != null && maxDistance != null) {
             assert minDistance <= maxDistance;
         }
     }
 
-    public Row(long chatId, String userName, java.sql.Date date, State state, LatLon startPoint) {
+    public Row(long chatId, String userName, long date, State state, LatLon startPoint) {
         this(chatId, userName, date, state, startPoint, null, null);
     }
 
-    public Row(long chatId, String userName, java.sql.Date date, State empty) {
+    public Row(long chatId, String userName, long date, State empty) {
         this(chatId, userName, date, empty, null);
     }
 
     public Row(Row old, State state) {
         this(old.chatId, old.userName, old.date, state, old.startPoint, old.minDistance, old.maxDistance);
+    }
+
+    public Row withState(State s) {
+        return new Row(id, chatId, userName, date, s, startPoint, minDistance, maxDistance);
+    }
+
+    public Row withDate(long otherDate) {
+        return new Row(id, chatId, userName, otherDate, state, startPoint, minDistance, maxDistance);
     }
 
     @Override

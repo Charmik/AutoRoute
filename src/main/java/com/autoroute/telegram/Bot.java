@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.Date;
 
 public class Bot extends TelegramLongPollingBot {
 
@@ -46,8 +45,10 @@ public class Bot extends TelegramLongPollingBot {
         You sent all information, your routes are in progress. 
         Please be patient for them, it can takes hours for now. 
         Only 1 route will be generated for now, will be fixed later.
-        If you want more routes - just repeat the same data - another route will be generated.
+        If you want more routes - You can use /repeat command. It will generate another route with the same location/distance.
         """;
+
+    private static final String START_COMMAND = "Please start Bot with /start command.";
 
     static {
         try {
@@ -58,10 +59,12 @@ public class Bot extends TelegramLongPollingBot {
     }
 
     private final Database db;
+    ThreadLocal<Boolean> telegramSentMessage;
 
     public Bot(DefaultBotOptions options, Database db) {
         super(options);
         this.db = db;
+        this.telegramSentMessage = new ThreadLocal<>();
     }
 
     @Override
@@ -76,47 +79,79 @@ public class Bot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
+        this.telegramSentMessage.set(false);
         if (update.hasMessage()) {
             final long chatId = update.getMessage().getChatId();
-            final var msgDate = new Date(update.getMessage().getDate());
+            final long msgDate = update.getMessage().getDate();
             @Nullable final Row dbRow = db.getRow(chatId);
 
-            LOGGER.info("got update with chat_id: {}, row: {}", chatId, dbRow);
-            if (dbRow == null || dbRow.state() == State.GOT_ALL_ROUTES || dbRow.state() == State.FAILED_TO_PROCESS) {
-                processStartCommand(chatId, msgDate, update, dbRow);
+            LOGGER.info("got update with chat_id: {}, date: {}, row: {}", chatId, msgDate, dbRow);
+
+            if (dbRow == null) {
+                processStartCommand(chatId, msgDate, update, null);
             } else {
                 switch (dbRow.state()) {
                     case CREATED -> processLocationUpdate(dbRow, msgDate, update);
                     case SENT_LOCATION -> processDistanceUpdate(dbRow, msgDate, update);
                     case SENT_DISTANCE -> sendMessage(chatId, WAITING_FOR_RESULT);
-//                    case GOT_FIRST_PART -> {
-//                        break;
-//                    }
-                    case FAILED_TO_PROCESS -> throw new RuntimeException("UNREACHABLE");
-                    case GOT_ALL_ROUTES -> throw new RuntimeException("UNREACHABLE");
-                    default -> throw new RuntimeException("UNREACHABLE");
+                    case FAILED_TO_PROCESS -> {
+                        processStartCommand(chatId, msgDate, update, dbRow);
+                        processRepeatCommand(chatId, msgDate, update, dbRow);
+                    }
+                    case GOT_ALL_ROUTES -> {
+                        processStartCommand(chatId, msgDate, update, dbRow);
+                        processRepeatCommand(chatId, msgDate, update, dbRow);
+                    }
+                }
+            }
+            if (!this.telegramSentMessage.get()) {
+                if (dbRow != null && dbRow.state() == State.GOT_ALL_ROUTES) {
+                    sendMessage(chatId, "You need to start bot with /start command. " +
+                        "Or you can use /repeat command to generate another route with the same location and distance");
+                } else {
+                    sendMessage(chatId, START_COMMAND);
                 }
             }
         }
     }
 
-    private void processStartCommand(long chatId, Date msgDate, Update update, Row oldRow) {
+    private void processStartCommand(long chatId, long msgDate, Update update, Row oldRow) {
         if (update.getMessage().hasText() && "/start".equals(update.getMessage().getText())) {
             Row row = new Row(chatId, update.getMessage().getChat().getUserName(), msgDate, State.CREATED);
             if (oldRow == null) {
                 LOGGER.info("insert new row on /start: {}", row);
                 db.insertRow(row);
-            } else {
+                sendMessage(chatId, SEND_LOCATION_MESSAGE);
+                // TOOD: FAILED_TO_PROCESS if we got the same data - skip it.
+            } else if (oldRow.state() == State.GOT_ALL_ROUTES || oldRow.state() == State.FAILED_TO_PROCESS) {
                 LOGGER.info("update row on /start: {}", row);
                 db.updateRow(row);
+                sendMessage(chatId, SEND_LOCATION_MESSAGE);
+            } else {
+                sendMessage(chatId, "You route is in progress. Please wait for it.");
             }
-            sendMessage(chatId, SEND_LOCATION_MESSAGE);
-        } else {
-            sendMessage(chatId, "Please start bot with /start command.");
         }
     }
 
-    private void processLocationUpdate(@NotNull Row dbRow, Date msgDate, Update update) {
+    private void processRepeatCommand(long chatId, long msgDate, Update update, Row oldRow) {
+        if (update.getMessage().hasText() && "/repeat".equals(update.getMessage().getText())) {
+            if (oldRow == null) {
+                sendMessage(chatId, "You need to build a route before /repeat.");
+            } else if (oldRow.state() == State.GOT_ALL_ROUTES) {
+                sendMessage(chatId, "We started to generate new route with your old data");
+                Row newRow = oldRow
+                    .withState(State.SENT_DISTANCE)
+                    .withDate(msgDate);
+                db.updateRow(newRow);
+            } else if (oldRow.state() == State.FAILED_TO_PROCESS) {
+                sendMessage(chatId, "We couldn't build a route earlier - so we don't try it again:( Try another location/distance please");
+            } else {
+                sendMessage(chatId, "You need to finish your previous route for using /repeat command");
+            }
+        }
+    }
+
+    private void processLocationUpdate(@NotNull Row dbRow, long msgDate, Update update) {
         assert dbRow != null;
         final Long chatId = update.getMessage().getChatId();
         if (!update.getMessage().hasLocation()) {
@@ -132,7 +167,7 @@ public class Bot extends TelegramLongPollingBot {
         sendMessage(chatId, SEND_DISTANCE_MESSAGE);
     }
 
-    private void processDistanceUpdate(@NotNull Row dbRow, Date date, Update update) {
+    private void processDistanceUpdate(@NotNull Row dbRow, long date, Update update) {
         assert dbRow != null;
         final Long chatId = update.getMessage().getChatId();
         if (!update.getMessage().hasText()) {
@@ -170,6 +205,7 @@ public class Bot extends TelegramLongPollingBot {
         message.disableWebPagePreview();
         try {
             execute(message);
+            telegramSentMessage.set(true);
         } catch (TelegramApiException e) {
             throw new RuntimeException(e);
         }
