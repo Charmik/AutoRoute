@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 
-public record Row(@Nullable Long id, long chatId, String userName, long date, State state, LatLon startPoint,
+public record Row(@Nullable Long id, long chatId, @Nullable String userName, long date, State state, LatLon startPoint,
                   Integer minDistance,
                   Integer maxDistance) {
 
@@ -16,11 +16,11 @@ public record Row(@Nullable Long id, long chatId, String userName, long date, St
         }
     }
 
-    public Row(long chatId, String userName, long date, State state, LatLon startPoint) {
+    public Row(long chatId, @Nullable String userName, long date, State state, LatLon startPoint) {
         this(chatId, userName, date, state, startPoint, null, null);
     }
 
-    public Row(long chatId, String userName, long date, State empty) {
+    public Row(long chatId, @Nullable String userName, long date, State empty) {
         this(chatId, userName, date, empty, null);
     }
 
@@ -44,7 +44,8 @@ public record Row(@Nullable Long id, long chatId, String userName, long date, St
         Row row = (Row) o;
 
         if (chatId != row.chatId) return false;
-        if (!userName.equals(row.userName)) return false;
+        if (date != row.date) return false;
+        if (!Objects.equals(userName, row.userName)) return false;
         if (state != row.state) return false;
         if (!Objects.equals(startPoint, row.startPoint)) return false;
         if (!Objects.equals(minDistance, row.minDistance)) return false;
@@ -54,8 +55,9 @@ public record Row(@Nullable Long id, long chatId, String userName, long date, St
     @Override
     public int hashCode() {
         int result = (int) (chatId ^ (chatId >>> 32));
-        result = 31 * result + userName.hashCode();
-        result = 31 * result + state.hashCode();
+        result = 31 * result + (userName != null ? userName.hashCode() : 0);
+        result = 31 * result + (int) (date ^ (date >>> 32));
+        result = 31 * result + (state != null ? state.hashCode() : 0);
         result = 31 * result + (startPoint != null ? startPoint.hashCode() : 0);
         result = 31 * result + (minDistance != null ? minDistance.hashCode() : 0);
         result = 31 * result + (maxDistance != null ? maxDistance.hashCode() : 0);

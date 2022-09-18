@@ -87,6 +87,14 @@ class DatabaseTest {
     }
 
     @Test
+    void userNameCanBeNull() {
+        final Row r1 = new Row(15, null, 15, State.SENT_LOCATION, new LatLon(13.2, 14.5), 1, 2);
+        db.insertRow(r1);
+        final Row r2 = db.getRow(15);
+        Assertions.assertEquals(r1, r2);
+    }
+
+    @Test
     void getRowsByState() {
         final Row r1 = new Row(1, "charm", 15, State.CREATED, new LatLon(1, 1), 1, 2);
         final Row r2 = new Row(2, "charm", 15, State.CREATED, new LatLon(2, 2), 2, 3);
