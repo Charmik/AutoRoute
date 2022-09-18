@@ -91,7 +91,7 @@ public class Main {
                     LOGGER.info("Start generate GPX for the route");
                     final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
                     for (WayPoint wayPoint : response.wayPoints()) {
-                        LOGGER.info("https://www.openstreetmap.org/node/" + wayPoint.id());
+                        LOGGER.info("https://www.openstreetmap.org/node/{}", wayPoint.id());
                     }
 
                     final Path tracksFolder = Paths.get("tracks").resolve(Paths.get(startPoint.toString()));
@@ -205,8 +205,8 @@ public class Main {
         debugQuireByIds.append(");\nout;");
         LOGGER.info("----------------------------");
         LOGGER.info("----------------------------");
-        LOGGER.info("debugQuireByIds:\n" + debugQuireByIds);
-        LOGGER.info("found: " + wayPoints.size() + " nodes");
+        LOGGER.info("debugQuireByIds:\n{}", debugQuireByIds);
+        LOGGER.info("found: {} nodes", wayPoints.size());
         LOGGER.info("Print Tags sorted by popularity");
         tagToCounterStats.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(LOGGER::info);
         return wayPoints;

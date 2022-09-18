@@ -56,7 +56,7 @@ public class OverPassAPI {
         query.append("<print mode=\"meta\"/>\n");
         query.append("</osm-script>");
 
-        LOGGER.info("query:\n" + query);
+        LOGGER.info("query:\n{}", query);
 
         List<OverpassResponse> responses = new ArrayList<>();
 
@@ -94,7 +94,6 @@ public class OverPassAPI {
                     return true;
                 } catch (OsmConnectionException e) {
                     LOGGER.info("couldn't get data by OverPass API, try to repeat: ", e);
-                    LOGGER.info(e.getMessage() + " " + e.getDescription() + e);
                     return false;
                 } catch (Exception e) {
                     LOGGER.info("couldn't get data by OverPass API, try to repeat: ", e);

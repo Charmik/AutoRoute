@@ -105,7 +105,7 @@ public class OsrmAPI implements TripAPI {
                 }
                 return result;
             } catch (JSONException e) {
-                LOGGER.warn("JSON error, request was: " + request + "\n" + body);
+                LOGGER.warn("JSON error, request was: {}\n{}", request, body);
                 throw new RuntimeException("couldn't parse JSON: " + body, e);
             }
         } catch (HttpTimeoutException e) {
