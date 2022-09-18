@@ -1,5 +1,6 @@
-package com.autoroute.api.osrm.services;
+package com.autoroute.api.trip.services;
 
+import com.autoroute.api.trip.TripAPI;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
 import org.apache.logging.log4j.LogManager;
@@ -23,21 +24,23 @@ import java.util.List;
 /**
  * @see <a href="http://project-osrm.org/docs/v5.7.0/api/#trip-service">orsm trip API documentation</a>
  */
-public class TripAPI {
+public class OsrmAPI implements TripAPI {
 
-    private static final Logger LOGGER = LogManager.getLogger(TripAPI.class);
+    private static final Logger LOGGER = LogManager.getLogger(OsrmAPI.class);
     private static final int TIMEOUT_SECONDS = 120;
 
     private final HttpClient client;
     private final Cache cache;
 
-    public TripAPI() {
+    public OsrmAPI() {
         this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS)).build();
         this.cache = new Cache();
         this.cache.loadCache();
     }
 
-    public OsrmResponse generateRoute(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
+    @Override
+    public OsrmResponse generateTripBetweenTwoPoints(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
+        assert wayPoints.size() == 2;
         return callAPI("routes", wayPoints, "route", "driving", "false");
     }
 
@@ -47,9 +50,9 @@ public class TripAPI {
      * @param wayPoints The list containing wayPoints in the trip.
      * @return a OsrmResponse.
      */
-    public OsrmResponse generateTrip(List<WayPoint> wayPoints, boolean roundTrip) throws TooManyCoordinatesException, HttpTimeoutException {
-        return callAPI("trips", wayPoints, "trip", "bike", "full",
-            "roundtrip=" + roundTrip, "source=first");
+    @Override
+    public OsrmResponse generateTrip(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
+        return callAPI("trips", wayPoints, "trip", "bike", "full", "source=first");
     }
 
     @NotNull
@@ -64,12 +67,12 @@ public class TripAPI {
             url.append("&").append(additionalParam);
         }
         final String urlStr = url.toString();
-        
+
         if (wayPoints.size() == 2) {
             final OsrmResponse cacheResult = cache.getOrNull(urlStr);
             if (cacheResult != null) {
                 LOGGER.info("url from cache: {}", urlStr);
-                return new OsrmResponse(cacheResult.code(), cacheResult.distance(), cacheResult.coordinates(),
+                return new OsrmResponse(cacheResult.distance(), cacheResult.coordinates(),
                     wayPoints);
             } else {
                 LOGGER.info("route with 2 points not found in cache");
@@ -153,7 +156,7 @@ public class TripAPI {
                 coordinates.add(new LatLon(lat, lon));
             }
         }
-        return new OsrmResponse(code, distance_km, coordinates, wayPoints);
+        return new OsrmResponse(distance_km, coordinates, wayPoints);
     }
 
     public void flush() {

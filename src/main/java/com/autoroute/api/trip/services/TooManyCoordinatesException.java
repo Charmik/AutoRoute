@@ -1,4 +1,4 @@
-package com.autoroute.api.osrm.services;
+package com.autoroute.api.trip.services;
 
 import org.json.JSONException;
 

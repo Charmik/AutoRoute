@@ -1,8 +1,8 @@
 package com.autoroute.logistic;
 
-import com.autoroute.api.osrm.services.OsrmResponse;
-import com.autoroute.api.osrm.services.TooManyCoordinatesException;
-import com.autoroute.api.osrm.services.TripAPI;
+import com.autoroute.api.trip.services.OsrmAPI;
+import com.autoroute.api.trip.services.OsrmResponse;
+import com.autoroute.api.trip.services.TooManyCoordinatesException;
 import com.autoroute.gpx.GpxGenerator;
 import com.autoroute.gpx.RouteDuplicateDetector;
 import com.autoroute.osm.LatLon;
@@ -43,14 +43,14 @@ public class RouteDistanceAlgorithm {
     private static final ExecutorService FILTER_NODES_POOL = Executors.newFixedThreadPool(5);
     private static final ExecutorService ALGORITHM_POOL = Executors.newFixedThreadPool(5);
 
-    private final TripAPI tripAPI;
+    private final OsrmAPI osrmAPI;
     private final RouteDuplicateDetector duplicate;
     private final String user; // TODO: delete this field and move logic inside PointVisitor
     private int debugIndexCount = 0;
 
     public RouteDistanceAlgorithm(RouteDuplicateDetector duplicate, String user) {
         this.user = user;
-        this.tripAPI = new TripAPI();
+        this.osrmAPI = new OsrmAPI();
         this.duplicate = duplicate;
     }
 
@@ -147,7 +147,7 @@ public class RouteDistanceAlgorithm {
                 }
 
                 // can we use fast generateTrip without coordinates just for distance and when found a route - use full mode? Is it faster?
-                OsrmResponse response = tripAPI.generateTrip(currentWayPoints, true);
+                OsrmResponse response = osrmAPI.generateTrip(currentWayPoints);
                 if (response.distance() < minDistance) {
                     LOGGER.info("got too small distance: " + response.distance() + ", add 1 node");
                     if (erasedPoints.isEmpty()) {
@@ -207,7 +207,7 @@ public class RouteDistanceAlgorithm {
                     response = addWaypointsAsManyAsPossible(
                         maxDistance, currentWayPoints, erasedPoints, kmPerOneNode, response);
                     LOGGER.info("Found a route with: " + response.wayPoints().size() + " waypoints!");
-                    return new OsrmResponse(response, kmPerOneNode);
+                    return response.withKmPerOneNode(kmPerOneNode);
                 }
 //                saveDebugTrack(response);
                 if (iteration % 10 == 0) {
@@ -271,7 +271,7 @@ public class RouteDistanceAlgorithm {
             WayPoint erasedPoint = erasedShuffle.get(i);
             currentWayPoints.add(erasedPoint);
             try {
-                OsrmResponse newResponse = tripAPI.generateTrip(currentWayPoints, true);
+                OsrmResponse newResponse = osrmAPI.generateTrip(currentWayPoints);
                 var distanceDiff = newResponse.distance() - currentDistance;
                 if (newResponse.distance() < maxDistance && (distanceDiff < maxDistance / 100 * 2)) {
                     response = newResponse;
@@ -356,11 +356,9 @@ public class RouteDistanceAlgorithm {
                 twoPoints.add(filteredPoints.get(0));
                 twoPoints.add(wayPoint);
                 try {
-                    final OsrmResponse response = tripAPI.generateRoute(twoPoints);
-
+                    final OsrmResponse response = osrmAPI.generateTripBetweenTwoPoints(twoPoints);
                     final int newCount = count.addAndGet(1);
-                    LOGGER.info("got trip " +
-                        newCount + "/" + filteredPoints.size());
+                    LOGGER.info("filtering waypoints: {}/{}", newCount, filteredPoints.size());
                     return response;
                 } catch (TooManyCoordinatesException e) {
                     throw new RuntimeException(e);
@@ -387,7 +385,7 @@ public class RouteDistanceAlgorithm {
             throw new RuntimeException(e);
         }
         LOGGER.info("Removed: " + (filteredPoints.size() - result.size()) + " nodes. Got: " + result.size() + " nodes");
-        tripAPI.flush();
+        osrmAPI.flush();
         return result;
     }
 
@@ -453,8 +451,8 @@ public class RouteDistanceAlgorithm {
         return false;
     }
 
-    public TripAPI getTripAPI() {
-        return tripAPI;
+    public OsrmAPI getTripAPI() {
+        return osrmAPI;
     }
 
     private enum FindStats {
