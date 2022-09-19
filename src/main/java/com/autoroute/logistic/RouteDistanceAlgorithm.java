@@ -1,5 +1,6 @@
 package com.autoroute.logistic;
 
+import com.autoroute.Utils;
 import com.autoroute.api.trip.services.OsrmAPI;
 import com.autoroute.api.trip.services.OsrmResponse;
 import com.autoroute.api.trip.services.TooManyCoordinatesException;
@@ -101,21 +102,28 @@ public class RouteDistanceAlgorithm {
     @Nullable
     private OsrmResponse buildRoute(double minDistance,
                                     double maxDistance,
-                                    double kmPerOneNode,
+                                    double originalKmPerOneNode,
                                     final List<WayPoint> currentWayPoints,
                                     AtomicBoolean completed) {
-        if (currentWayPoints.size() == 1) {
+
+        if (currentWayPoints.isEmpty() || currentWayPoints.size() == 1) {
             throw new IllegalArgumentException("can't build route without way points");
         }
+        var firstElementDebug = currentWayPoints.get(0);
+        double kmPerOneNode = originalKmPerOneNode;
         List<WayPoint> erasedPoints = new ArrayList<>();
         while (currentWayPoints.size() > 1) {
             erasedPoints.add(currentWayPoints.get(currentWayPoints.size() - 1));
             currentWayPoints.remove(currentWayPoints.size() - 1);
         }
         for (int iteration = 1; iteration < MAX_ITERATIONS; iteration++) {
+            assert firstElementDebug.equals(currentWayPoints.get(0)); // operations should never change first element
             // every 1/100 iteration we increase kmPerOneNode by X%
             assert MAX_ITERATIONS >= 100;
-            if (iteration % (MAX_ITERATIONS / (MAX_ITERATIONS / ITERATION_DIVIDER)) == 0) {
+
+            if (Utils.percent(iteration, MAX_ITERATIONS) > 30 &&
+                iteration % (MAX_ITERATIONS / (MAX_ITERATIONS / ITERATION_DIVIDER)) == 0) {
+                // TODO: add test that increasing should be enough to get max distance
                 kmPerOneNode *= 1.03;
                 kmPerOneNode = Math.min(kmPerOneNode, maxDistance);
                 LOGGER.info("couldn't build a route for {} iterations. increase kmPerOneNode to: {},",
@@ -189,8 +197,8 @@ public class RouteDistanceAlgorithm {
                     // TODO: more longer path can be not via Start point. Can we just add points here sometimes?
                     addToErasedPoints(currentWayPoints, erasedPoints);
                     FindStats.increment(FindStats.HAS_START_POINT);
-                    // don't check cycle if we can't build a route for a long time
-                } else if (kmPerOneNode < maxDistance && hasACycle(response.coordinates())) {
+                    // don't check cycle if we made a lot if iterations already
+                } else if (Utils.percent(iteration, MAX_ITERATIONS) < 80 && hasACycle(response.coordinates())) {
                     LOGGER.info("route has a Cycle");
                     addToErasedPoints(currentWayPoints, erasedPoints);
                     FindStats.increment(FindStats.HAS_A_CYCLE);
@@ -205,7 +213,7 @@ public class RouteDistanceAlgorithm {
                         return null;
                     }
                     response = addWaypointsAsManyAsPossible(
-                        maxDistance, currentWayPoints, erasedPoints, kmPerOneNode, response);
+                        maxDistance, currentWayPoints, erasedPoints, originalKmPerOneNode, response);
                     LOGGER.info("Found a route with: {} waypoints!", response.wayPoints().size());
                     return response.withKmPerOneNode(kmPerOneNode);
                 }
@@ -234,7 +242,7 @@ public class RouteDistanceAlgorithm {
             "couldn't build a route with given wayPoints for: " + MAX_ITERATIONS + " iterations");
     }
 
-    private void saveDebugTrack(OsrmResponse response) {
+    void saveDebugTrack(OsrmResponse response) {
         Paths.get("debug").toFile().mkdirs();
         var gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
         final String debugFileName = "debug/" + ((debugIndexCount++) % 50) + ".gpx";
@@ -375,9 +383,9 @@ public class RouteDistanceAlgorithm {
                 // should be 2, but we add 0.5 more for other nodes
                 if (response.distance() * 1.5 < maxDistance) { // need the way back
                     result.add(response.wayPoints().get(1));
-                    LOGGER.info("add current points, distance: {}", response.distance());
+                    LOGGER.info("filterWayPoints, add current points, distance: {}", response.distance());
                 } else {
-                    LOGGER.info("remove current point, distance: {}", response.distance());
+                    LOGGER.info("filterWayPoints, remove current point, distance: {}", response.distance());
                 }
             }
         } catch (InterruptedException | ExecutionException e) {
@@ -397,16 +405,24 @@ public class RouteDistanceAlgorithm {
         currentList.add(erasedWayPoint);
     }
 
+    private WayPoint getRandomAndRemoveFromList(List<WayPoint> points) {
+        var index = ThreadLocalRandom.current().nextInt(points.size());
+        var res = points.get(index);
+        points.remove(index);
+        return res;
+    }
+
     private void addToErasedPoints(List<WayPoint> currentList, List<WayPoint> erasedList) {
         if (currentList.size() == 1) {
             return;
         }
-        var erasedWayPoint = getRandomAndRemoveFromList(currentList);
+        var erasedWayPoint = getRandomAndRemoveFromListExceptFirst(currentList);
         erasedList.add(erasedWayPoint);
     }
 
-    private WayPoint getRandomAndRemoveFromList(List<WayPoint> points) {
-        var index = ThreadLocalRandom.current().nextInt(points.size());
+    private WayPoint getRandomAndRemoveFromListExceptFirst(List<WayPoint> points) {
+        assert points.size() > 1;
+        var index = ThreadLocalRandom.current().nextInt(points.size() - 1) + 1;
         var res = points.get(index);
         points.remove(index);
         return res;
@@ -480,18 +496,5 @@ public class RouteDistanceAlgorithm {
                 LOGGER.info("{} {}", value, stats.get(value));
             }
         }
-    }
-
-    public static void main(String[] args) throws IOException {
-        final GPX gpx = GPX.read(Paths.get("tracks/36.378029_33.92704/2.gpx"));
-        final List<io.jenetics.jpx.WayPoint> points = gpx.tracks().toList().get(0).getSegments().get(0).getPoints();
-
-        final List<LatLon> latLons = points.stream()
-            .map(point -> new LatLon(point.getLatitude().doubleValue(), point.getLongitude().doubleValue()))
-            .toList();
-        System.out.println("size: " + latLons.size());
-        final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(null, "charm");
-        final boolean b = routeDistanceAlgorithm.hasACycle(latLons);
-        System.out.println(b);
     }
 }
