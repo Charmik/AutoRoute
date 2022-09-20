@@ -70,7 +70,6 @@ public class Main {
 
                     var response = routeDistanceAlgorithm.buildRoute(
                         dbRow.minDistance(), dbRow.maxDistance(), wayPoints, kmPerNode, pointVisiter, 5);
-                    routeDistanceAlgorithm.getTripAPI().flush();
                     final long chatId = dbRow.chatId();
                     if (response == null) {
                         LOGGER.info("got response = null for row: {}", dbRow);
@@ -108,7 +107,8 @@ public class Main {
                     db.updateRow(newRow);
                     telegramBot.sendMessage(chatId,
                         "Your routes are ready! You can use this site to look at your route: https://gpx.studio/.\n" +
-                            "You need to download generated .gpx file and load it on the site: Load GPX");
+                            "You need to download generated .gpx file and load it on the site: Load GPX.\n" +
+                            "If you want more routes - You can use /repeat command. It will generate another route with the same location/distance.");
                     telegramBot.sendFile(chatId, gpxPath);
                 }
                 if (readyRows.isEmpty()) {

@@ -45,7 +45,6 @@ public class Bot extends TelegramLongPollingBot {
         You sent all information, your routes are in progress. 
         Please be patient for them, it can takes hours for now. 
         Only 1 route will be generated for now, will be fixed later.
-        If you want more routes - You can use /repeat command. It will generate another route with the same location/distance.
         """;
 
     private static final String START_COMMAND = "Please start Bot with /start command.";
