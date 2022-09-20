@@ -40,19 +40,22 @@ public class RouteDistanceAlgorithm {
     private static final int MAX_ITERATIONS = 100;
     private static final int ITERATION_DIVIDER = MAX_ITERATIONS / 100;
 
-    // TODO: remove static
-    private static final ExecutorService FILTER_NODES_POOL = Executors.newFixedThreadPool(5);
-    private static final ExecutorService ALGORITHM_POOL = Executors.newFixedThreadPool(5);
+    // TODO: moved ThreadPool from here
+    private static final int CORES = Runtime.getRuntime().availableProcessors();
+    private static final ExecutorService FILTER_NODES_POOL = Executors.newFixedThreadPool(CORES);
+    private static final ExecutorService ALGORITHM_POOL = Executors.newFixedThreadPool(CORES);
 
     private final OsrmAPI osrmAPI;
     private final RouteDuplicateDetector duplicate;
     private final String user; // TODO: delete this field and move logic inside PointVisitor
+    private final AlgorithmIterationStats iterationStats;
     private int debugIndexCount = 0;
 
     public RouteDistanceAlgorithm(RouteDuplicateDetector duplicate, String user) {
         this.user = user;
         this.osrmAPI = new OsrmAPI();
         this.duplicate = duplicate;
+        this.iterationStats = new AlgorithmIterationStats();
     }
 
     @Nullable
@@ -69,6 +72,7 @@ public class RouteDistanceAlgorithm {
         AtomicBoolean completed = new AtomicBoolean(false);
         // don't need to do it every route
         List<WayPoint> currentWayPoints = filterWayPoints(maxDistance, originalWayPoints, pointVisiter);
+        iterationStats.startProcessing();
         for (int i = 0; i < threads; i++) {
             var threadLocalWayPoints = new ArrayList<>(currentWayPoints);
             completionService.submit(() -> buildRoute(
@@ -88,6 +92,8 @@ public class RouteDistanceAlgorithm {
             return null;
         } catch (ExecutionException e) {
             throw new RuntimeException(e);
+        } finally {
+            iterationStats.endProcessing();
         }
         return null;
     }
@@ -116,7 +122,10 @@ public class RouteDistanceAlgorithm {
             erasedPoints.add(currentWayPoints.get(currentWayPoints.size() - 1));
             currentWayPoints.remove(currentWayPoints.size() - 1);
         }
-        for (int iteration = 1; iteration < MAX_ITERATIONS; iteration++) {
+        int iteration = 0;
+        while (iteration < MAX_ITERATIONS) {
+            iteration++;
+            long startIterationTime = System.currentTimeMillis();
             assert firstElementDebug.equals(currentWayPoints.get(0)); // operations should never change first element
             // every 1/100 iteration we increase kmPerOneNode by X%
             assert MAX_ITERATIONS >= 100;
@@ -134,7 +143,7 @@ public class RouteDistanceAlgorithm {
                 return null;
             }
             try {
-                if (currentWayPoints.size() == 1) {
+                while (currentWayPoints.size() == 1 || currentWayPoints.size() < minDistance / kmPerOneNode) {
                     if (erasedPoints.isEmpty()) {
                         LOGGER.info("don't have nodes to erase. Exit");
                         return null;
@@ -153,9 +162,9 @@ public class RouteDistanceAlgorithm {
                         return null;
                     }
                 }
-
                 // can we use fast generateTrip without coordinates just for distance and when found a route - use full mode? Is it faster?
                 OsrmResponse response = osrmAPI.generateTrip(currentWayPoints);
+                LOGGER.info("got response distance: {}", response.distance());
                 if (response.distance() < minDistance) {
                     LOGGER.info("got too small distance: {}, add 1 node", response.distance());
                     if (erasedPoints.isEmpty()) {
@@ -217,10 +226,12 @@ public class RouteDistanceAlgorithm {
                     LOGGER.info("Found a route with: {} waypoints!", response.wayPoints().size());
                     return response.withKmPerOneNode(kmPerOneNode);
                 }
-//                saveDebugTrack(response);
-                if (iteration % 10 == 0) {
+                iterationStats.pushTiming(System.currentTimeMillis() - startIterationTime);
+                if (iteration % 50 == 0) {
                     FindStats.printStats();
                 }
+                iterationStats.tryLogStats();
+                //saveDebugTrack(response);
             } catch (HttpTimeoutException e) {
                 LOGGER.info("Sleep for a while. got timeout from points: {}", currentWayPoints);
                 try {
@@ -238,8 +249,7 @@ public class RouteDistanceAlgorithm {
                     , currentWayPoints.size(), erase);
             }
         }
-        throw new IllegalStateException(
-            "couldn't build a route with given wayPoints for: " + MAX_ITERATIONS + " iterations");
+        return null;
     }
 
     void saveDebugTrack(OsrmResponse response) {
@@ -393,7 +403,6 @@ public class RouteDistanceAlgorithm {
         }
         LOGGER.info("Removed: {} nodes. Got result: {} nodes",
             filteredPoints.size() - result.size(), result.size());
-        osrmAPI.flush();
         return result;
     }
 
