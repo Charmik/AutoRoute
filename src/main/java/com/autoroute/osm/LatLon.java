@@ -1,8 +1,11 @@
 package com.autoroute.osm;
 
-import java.io.Serializable;
+import org.jetbrains.annotations.NotNull;
 
-public record LatLon(double lat, double lon) implements Serializable {
+import java.io.Serializable;
+import java.util.Comparator;
+
+public record LatLon(double lat, double lon) implements Serializable, Comparable<LatLon> {
 
     public boolean isClosePoint(LatLon other) {
         double distance = distance(this, other);
@@ -41,5 +44,12 @@ public record LatLon(double lat, double lon) implements Serializable {
     @Override
     public String toString() {
         return lat + "_" + lon;
+    }
+
+    @Override
+    public int compareTo(@NotNull LatLon o) {
+        return Comparator.comparingDouble(LatLon::lat)
+            .thenComparingDouble(LatLon::lon)
+            .compare(this, o);
     }
 }
