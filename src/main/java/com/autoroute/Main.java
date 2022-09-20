@@ -51,65 +51,7 @@ public class Main {
                 final List<Row> readyRows = db.getRowsByStateSortedByDate(State.SENT_DISTANCE);
                 LOGGER.info("found: {} rows from db", readyRows.size());
                 for (Row dbRow : readyRows) {
-                    double kmPerNode = DEFAULT_KM_PER_ONE_NODE;
-                    LOGGER.info("got a row: {}", dbRow);
-                    final LatLon startPoint = dbRow.startPoint();
-                    List<WayPoint> wayPoints = readNodes(startPoint, tagsReader, dbRow);
-                    if (wayPoints.size() > 500) {
-                        LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
-                        tagsReader.readTags("short_list_tags.txt");
-                        wayPoints = readNodes(startPoint, tagsReader, dbRow);
-                    }
-
-                    final String user = String.valueOf(dbRow.id());
-                    var pointVisiter = new PointVisiter();
-                    var duplicate = new RouteDuplicateDetector();
-
-                    final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate, user);
-
-                    final int minDistance = dbRow.minDistance();
-                    final int maxDistance = dbRow.maxDistance();
-                    var response = routeDistanceAlgorithm.buildRoute(
-                        minDistance, maxDistance, wayPoints, kmPerNode, pointVisiter, 5);
-                    final long chatId = dbRow.chatId();
-                    if (response == null) {
-                        LOGGER.info("got response = null for row: {}", dbRow);
-                        db.updateRow(dbRow.withState(State.FAILED_TO_PROCESS));
-                        telegramBot.sendMessage(chatId, "Seems like we couldn't build a route " +
-                            "with your criteria:( Please provide another distances or start point");
-                        break;
-                    }
-                    kmPerNode = response.kmPerOneNode();
-
-                    LOGGER.info("Start visit waypoints from the route");
-
-                    for (WayPoint wayPoint : response.wayPoints()) {
-                        pointVisiter.visit(user, wayPoint);
-                    }
-
-                    LOGGER.info("Start generate GPX for the route");
-                    final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
-                    for (WayPoint wayPoint : response.wayPoints()) {
-                        LOGGER.info("https://www.openstreetmap.org/node/{}", wayPoint.id());
-                    }
-
-                    final Path tracksFolder = Utils.pathForRoute(startPoint, minDistance, maxDistance);
-                    tracksFolder.toFile().mkdirs();
-
-                    LOGGER.info("Start reading all tracks");
-                    var tracks = RouteDuplicateDetector.readTracks(startPoint, minDistance, maxDistance);
-                    var index = tracks.size() + 1;
-                    final Path gpxPath = tracksFolder.resolve(index + ".gpx");
-                    LOGGER.info("save a route as: {}", gpxPath);
-                    GPX.write(gpx, gpxPath);
-
-                    Row newRow = new Row(dbRow, State.GOT_ALL_ROUTES);
-                    db.updateRow(newRow);
-                    telegramBot.sendMessage(chatId,
-                        "Your routes are ready! You can use this site to look at your route: https://gpx.studio/.\n" +
-                            "You need to download generated .gpx file and load it on the site: Load GPX.\n" +
-                            "If you want more routes - You can use /repeat command. It will generate another route with the same location/distance.");
-                    telegramBot.sendFile(chatId, gpxPath);
+                    handleRouteRequest(db, telegramBot, tagsReader, dbRow);
                 }
                 if (readyRows.isEmpty()) {
                     LOGGER.info("didn't find any rows in db, sleeping...");
@@ -122,6 +64,68 @@ public class Main {
                 System.exit(2);
             }
         }
+    }
+
+    private static void handleRouteRequest(Database db, Bot telegramBot, TagsFileReader tagsReader, Row dbRow) throws IOException {
+        double kmPerNode = DEFAULT_KM_PER_ONE_NODE;
+        LOGGER.info("got a row: {}", dbRow);
+        final LatLon startPoint = dbRow.startPoint();
+        List<WayPoint> wayPoints = readNodes(startPoint, tagsReader, dbRow);
+        if (wayPoints.size() > 500) {
+            LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
+            tagsReader.readTags("short_list_tags.txt");
+            wayPoints = readNodes(startPoint, tagsReader, dbRow);
+        }
+
+        final String user = String.valueOf(dbRow.id());
+        var pointVisiter = new PointVisiter();
+        var duplicate = new RouteDuplicateDetector();
+
+        final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate, user);
+
+        final int minDistance = dbRow.minDistance();
+        final int maxDistance = dbRow.maxDistance();
+        var response = routeDistanceAlgorithm.buildRoute(
+            minDistance, maxDistance, wayPoints, kmPerNode, pointVisiter, 5);
+        final long chatId = dbRow.chatId();
+        if (response == null) {
+            LOGGER.info("got response = null for row: {}", dbRow);
+            db.updateRow(dbRow.withState(State.FAILED_TO_PROCESS));
+            telegramBot.sendMessage(chatId, "Seems like we couldn't build a route " +
+                "with your criteria:( Please provide another distances or start point");
+            return;
+        }
+        kmPerNode = response.kmPerOneNode();
+
+        LOGGER.info("Start visit waypoints from the route");
+
+        for (WayPoint wayPoint : response.wayPoints()) {
+            pointVisiter.visit(user, wayPoint);
+        }
+
+        LOGGER.info("Start generate GPX for the route");
+        final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
+        for (WayPoint wayPoint : response.wayPoints()) {
+            LOGGER.info("https://www.openstreetmap.org/node/{}", wayPoint.id());
+        }
+
+        final Path tracksFolder = Utils.pathForRoute(startPoint, minDistance, maxDistance);
+        tracksFolder.toFile().mkdirs();
+
+        LOGGER.info("Start reading all tracks");
+        var tracks = RouteDuplicateDetector.readTracks(startPoint, minDistance, maxDistance);
+        var index = tracks.size() + 1;
+        final Path gpxPath = tracksFolder.resolve(index + ".gpx");
+        LOGGER.info("save a route as: {}", gpxPath);
+        GPX.write(gpx, gpxPath);
+
+        Row newRow = new Row(dbRow, State.GOT_ALL_ROUTES);
+        db.updateRow(newRow);
+        telegramBot.sendMessage(chatId,
+            "Your routes are ready! You can use this site to look at your route: https://gpx.studio/.\n" +
+                "You need to download generated .gpx file and load it on the site: Load GPX.\n" +
+                "If you want more routes - You can use /repeat command. It will generate another route with the same location/distance.");
+        telegramBot.sendFile(chatId, gpxPath);
     }
 
     private Settings readSqlSettings() {

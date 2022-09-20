@@ -33,7 +33,10 @@ public class OsrmAPI implements TripAPI {
     private final Cache cache;
 
     public OsrmAPI() {
-        this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS)).build();
+        this.client = HttpClient
+            .newBuilder()
+            .connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+            .build();
         this.cache = Cache.CACHE;
     }
 
