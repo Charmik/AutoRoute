@@ -4,11 +4,9 @@ import com.autoroute.osm.Tag;
 import de.westnordost.osmapi.OsmConnection;
 import de.westnordost.osmapi.common.errors.OsmConnectionException;
 import de.westnordost.osmapi.map.data.BoundingBox;
-import de.westnordost.osmapi.map.data.LatLon;
-import de.westnordost.osmapi.map.data.Node;
 import de.westnordost.osmapi.map.data.Relation;
 import de.westnordost.osmapi.map.data.Way;
-import de.westnordost.osmapi.overpass.MapDataWithGeometryHandler;
+import de.westnordost.osmapi.map.handler.MapDataHandler;
 import de.westnordost.osmapi.overpass.OverpassMapDataApi;
 import org.apache.brooklyn.util.repeat.Repeater;
 import org.apache.brooklyn.util.time.Duration;
@@ -18,7 +16,6 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -29,7 +26,7 @@ public class OverPassAPI {
     private static final String[] URLS = {
         "https://overpass-api.de/api/",
         "https://overpass.kumi.systems/api/",
-        "http://overpass.openstreetmap.ru/cgi/",
+//        "http://overpass.openstreetmap.ru/cgi/",
 //        "https://overpass.openstreetmap.fr/api/",
     };
 
@@ -57,17 +54,43 @@ public class OverPassAPI {
         query.append("</osm-script>");
 
         LOGGER.info("query:\n{}", query);
+        return executeQuery(query);
+    }
 
+    public List<OverpassResponse> getRodes(@NotNull com.autoroute.osm.LatLon center, int radiusMeters) {
+        StringBuilder query = new StringBuilder("<osm-script timeout=\"120\" element-limit=\"1073741824\">\n");
+        query.append("<query type=\"way\">\n");
+        query.append("<around lat=\"");
+        query.append(center.lat());
+        query.append("\" lon=\"");
+        query.append(center.lon());
+        query.append("\" radius=\"");
+        query.append(radiusMeters);
+        query.append("\"/>\n");
+        query.append("<has-kv k=\"highway\" regv=\"trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|bus_guideway|road|busway\"/>\n");
+        query.append("</query>\n");
+        query.append("<union>\n");
+        query.append("<item/>\n");
+        query.append("<recurse type=\"down\"/>\n");
+        query.append("</union>\n");
+        query.append("<print/>\n");
+
+        LOGGER.info("query:\n{}", query);
+        return executeQuery(query);
+    }
+
+    @NotNull
+    private static List<OverpassResponse> executeQuery(StringBuilder query) {
         List<OverpassResponse> responses = new ArrayList<>();
 
-        final MapDataWithGeometryHandler handler = new MapDataWithGeometryHandler() {
+        final MapDataHandler handler = new MapDataHandler() {
             @Override
-            public void handle(@NotNull BoundingBox boundingBox) {
-                LOGGER.info("handle with boundingBox not implemented");
+            public void handle(BoundingBox boundingBox) {
+                throw new UnsupportedOperationException();
             }
 
             @Override
-            public void handle(@NotNull Node node) {
+            public void handle(de.westnordost.osmapi.map.data.Node node) {
                 var position = node.getPosition();
 
                 var response = new OverpassResponse(node.getId(), node.getTags(),
@@ -76,13 +99,13 @@ public class OverPassAPI {
             }
 
             @Override
-            public void handle(@NotNull Way way, @NotNull BoundingBox boundingBox, @NotNull List<LatLon> list) {
-                LOGGER.info("handle with way not implemented");
+            public void handle(Way way) {
+                // TODO: implement if necessary for roads
             }
 
             @Override
-            public void handle(@NotNull Relation relation, @NotNull BoundingBox boundingBox, @NotNull Map<Long, LatLon> map, @NotNull Map<Long, List<LatLon>> map1) {
-                LOGGER.info("handle with relation not implemented");
+            public void handle(Relation relation) {
+                throw new UnsupportedOperationException();
             }
         };
 
@@ -90,7 +113,8 @@ public class OverPassAPI {
             .until(() -> {
                 try {
                     OverpassMapDataApi overpass = createOverpass();
-                    overpass.queryElementsWithGeometry(query.toString(), handler);
+                    overpass.queryElements(query.toString(), handler);
+
                     return true;
                 } catch (OsmConnectionException e) {
                     LOGGER.info("couldn't get data by OverPass API, try to repeat: ", e);
@@ -101,7 +125,7 @@ public class OverPassAPI {
                 }
             })
             .limitIterationsTo(20)
-            .backoff(Duration.FIVE_SECONDS, 2, Duration.FIVE_MINUTES)
+            .backoff(Duration.FIVE_SECONDS, 2, Duration.ONE_MINUTE)
             .run();
         return responses;
     }
