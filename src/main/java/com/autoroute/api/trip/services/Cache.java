@@ -47,7 +47,7 @@ public class Cache {
             .keySerializer(Serializer.STRING)
             .valueSerializer(new OsrmResponseSerializer())
             .expireMaxSize(size)
-            .expireAfterGet() //expireAfterCreate
+            .expireAfterCreate()
             .createOrOpen();
         LOGGER.info("created cache with size: {}", cache.size());
         this.counter = new AtomicInteger();
@@ -59,7 +59,7 @@ public class Cache {
 
     synchronized void put(String request, OsrmResponse response) {
         cache.put(request, response);
-        if (counter.incrementAndGet() % 200 == 0) {
+        if (counter.incrementAndGet() % 50 == 0) {
             var start = System.currentTimeMillis();
             LOGGER.info("commit db to disk");
             db.commit();
