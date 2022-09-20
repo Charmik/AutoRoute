@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RouteDistanceAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDistanceAlgorithm.class);
-    private static final int MAX_ITERATIONS = 100;
+    private static final int MAX_ITERATIONS = 1000;
     private static final int ITERATION_DIVIDER = MAX_ITERATIONS / 100;
 
     // TODO: moved ThreadPool from here
@@ -130,7 +130,7 @@ public class RouteDistanceAlgorithm {
             // every 1/100 iteration we increase kmPerOneNode by X%
             assert MAX_ITERATIONS >= 100;
 
-            if (Utils.percent(iteration, MAX_ITERATIONS) > 30 &&
+            if (Utils.percent(iteration, MAX_ITERATIONS) > 50 &&
                 iteration % (MAX_ITERATIONS / (MAX_ITERATIONS / ITERATION_DIVIDER)) == 0) {
                 // TODO: add test that increasing should be enough to get max distance
                 kmPerOneNode *= 1.03;
