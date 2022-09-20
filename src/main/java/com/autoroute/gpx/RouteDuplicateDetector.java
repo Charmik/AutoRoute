@@ -1,6 +1,7 @@
 package com.autoroute.gpx;
 
 import com.autoroute.osm.LatLon;
+import com.autoroute.utils.Utils;
 import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -9,9 +10,9 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 
+// TODO: add user everywhere because duplicates depends on the user
 public class RouteDuplicateDetector {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDuplicateDetector.class);
@@ -43,7 +44,8 @@ public class RouteDuplicateDetector {
 
     // TODO: add user parameter
     public boolean hasDuplicateInFiles(List<LatLon> points1, LatLon startPoint) {
-        List<Path> files = readTracks(startPoint);
+        /*
+        List<Path> files = readTracks(startPoint, dbRow.minDistance(), dbRow.maxDistance());
         for (Path path : files) {
             final GPX fileGPX = readRoute(path);
 
@@ -52,6 +54,7 @@ public class RouteDuplicateDetector {
                 return true;
             }
         }
+         */
         return false;
     }
 
@@ -69,7 +72,8 @@ public class RouteDuplicateDetector {
 
     // TODO: add user parameter
     public boolean hasDuplicateInFiles(GPX gpx, LatLon startPoint) {
-        List<Path> files = readTracks(startPoint);
+        /*
+        List<Path> files = readTracks(startPoint, dbRow.minDistance(), dbRow.maxDistance());
         var points1 = gpxToCoordinates(gpx);
         for (Path path : files) {
             var points2 = gpxToCoordinates(readRoute(path));
@@ -77,13 +81,14 @@ public class RouteDuplicateDetector {
                 return true;
             }
         }
+        */
         return false;
     }
 
     @NotNull
-    public static List<Path> readTracks(LatLon startPoint) {
+    public static List<Path> readTracks(LatLon startPoint, int minDistance, int maxDistance) {
         try {
-            return Files.walk(Paths.get("tracks/").resolve(startPoint.toString()), 1)
+            return Files.walk(Utils.pathForRoute(startPoint, minDistance, maxDistance), 1)
                 .filter(e -> e.toString().endsWith(".gpx"))
                 .toList();
         } catch (IOException e) {

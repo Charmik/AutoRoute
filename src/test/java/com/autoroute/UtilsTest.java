@@ -1,7 +1,11 @@
 package com.autoroute;
 
+import com.autoroute.osm.LatLon;
+import com.autoroute.utils.Utils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -43,5 +47,16 @@ class UtilsTest {
         } catch (IllegalArgumentException e) {
             Assertions.assertTrue(e.getMessage().contains("wrong arguments"));
         }
+    }
+
+    @Test
+    public void pathForRouteTest() {
+        var point = new LatLon(5.5, 10.6);
+        int min = 100;
+        int max = 200;
+        String expected = "tracks/100_200_5.5_10.6";
+
+        final Path resPath = Utils.pathForRoute(point, min, max);
+        Assertions.assertEquals(expected, resPath.toString());
     }
 }

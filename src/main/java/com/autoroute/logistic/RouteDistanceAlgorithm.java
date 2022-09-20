@@ -1,6 +1,5 @@
 package com.autoroute.logistic;
 
-import com.autoroute.Utils;
 import com.autoroute.api.trip.services.OsrmAPI;
 import com.autoroute.api.trip.services.OsrmResponse;
 import com.autoroute.api.trip.services.TooManyCoordinatesException;
@@ -8,6 +7,7 @@ import com.autoroute.gpx.GpxGenerator;
 import com.autoroute.gpx.RouteDuplicateDetector;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
+import com.autoroute.utils.Utils;
 import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

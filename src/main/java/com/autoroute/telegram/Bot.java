@@ -1,10 +1,10 @@
 package com.autoroute.telegram;
 
-import com.autoroute.Utils;
 import com.autoroute.osm.LatLon;
 import com.autoroute.telegram.db.Database;
 import com.autoroute.telegram.db.Row;
 import com.autoroute.telegram.db.State;
+import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;

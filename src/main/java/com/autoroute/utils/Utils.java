@@ -1,4 +1,9 @@
-package com.autoroute;
+package com.autoroute.utils;
+
+import com.autoroute.osm.LatLon;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public class Utils {
 
@@ -15,5 +20,10 @@ public class Utils {
             throw new IllegalArgumentException("wrong arguments for percentage: " + part + " " + max);
         }
         return part / (max / 100);
+    }
+
+    public static Path pathForRoute(LatLon startPoint, int minDistance, int maxDistance) {
+        String str = minDistance + "_" + maxDistance + "_" + startPoint;
+        return Paths.get("tracks").resolve(str);
     }
 }

@@ -16,6 +16,7 @@ import com.autoroute.telegram.db.Database;
 import com.autoroute.telegram.db.Row;
 import com.autoroute.telegram.db.Settings;
 import com.autoroute.telegram.db.State;
+import com.autoroute.utils.Utils;
 import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -24,7 +25,6 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -41,7 +41,6 @@ public class Main {
         Settings sqlSettings = readSqlSettings();
         final Database db = new Database(sqlSettings);
         Bot telegramBot = Bot.startBot(db);
-
 
         for (; ; ) {
             try {
@@ -68,13 +67,14 @@ public class Main {
 
                     final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate, user);
 
+                    final int minDistance = dbRow.minDistance();
+                    final int maxDistance = dbRow.maxDistance();
                     var response = routeDistanceAlgorithm.buildRoute(
-                        dbRow.minDistance(), dbRow.maxDistance(), wayPoints, kmPerNode, pointVisiter, 5);
+                        minDistance, maxDistance, wayPoints, kmPerNode, pointVisiter, 5);
                     final long chatId = dbRow.chatId();
                     if (response == null) {
                         LOGGER.info("got response = null for row: {}", dbRow);
-                        Row newRow = new Row(dbRow, State.FAILED_TO_PROCESS);
-                        db.updateRow(newRow);
+                        db.updateRow(dbRow.withState(State.FAILED_TO_PROCESS));
                         telegramBot.sendMessage(chatId, "Seems like we couldn't build a route " +
                             "with your criteria:( Please provide another distances or start point");
                         break;
@@ -93,11 +93,11 @@ public class Main {
                         LOGGER.info("https://www.openstreetmap.org/node/{}", wayPoint.id());
                     }
 
-                    final Path tracksFolder = Paths.get("tracks").resolve(Paths.get(startPoint.toString()));
+                    final Path tracksFolder = Utils.pathForRoute(startPoint, minDistance, maxDistance);
                     tracksFolder.toFile().mkdirs();
 
                     LOGGER.info("Start reading all tracks");
-                    var tracks = RouteDuplicateDetector.readTracks(startPoint);
+                    var tracks = RouteDuplicateDetector.readTracks(startPoint, minDistance, maxDistance);
                     var index = tracks.size() + 1;
                     final Path gpxPath = tracksFolder.resolve(index + ".gpx");
                     LOGGER.info("save a route as: {}", gpxPath);
