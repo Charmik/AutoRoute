@@ -37,11 +37,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RouteDistanceAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDistanceAlgorithm.class);
-    private static final int MAX_ITERATIONS = 1000;
+    private static final int CORES = Runtime.getRuntime().availableProcessors();
+    private static final int MAX_ITERATIONS = 1000 * CORES;
     private static final int ITERATION_DIVIDER = MAX_ITERATIONS / 100;
 
     // TODO: moved ThreadPool from here
-    private static final int CORES = Runtime.getRuntime().availableProcessors();
+
     private static final ExecutorService FILTER_NODES_POOL = Executors.newFixedThreadPool(CORES);
     private static final ExecutorService ALGORITHM_POOL = Executors.newFixedThreadPool(CORES);
 
