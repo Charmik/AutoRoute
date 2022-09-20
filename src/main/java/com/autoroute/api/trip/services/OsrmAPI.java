@@ -40,7 +40,7 @@ public class OsrmAPI implements TripAPI {
     @Override
     public OsrmResponse generateTripBetweenTwoPoints(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
         assert wayPoints.size() == 2;
-        return callAPI("routes", wayPoints, "route", "driving", "false");
+        return callAPI("routes", wayPoints, "route", "bike", "false");
     }
 
     /**
@@ -67,12 +67,12 @@ public class OsrmAPI implements TripAPI {
             url.append("&").append(additionalParam);
         }
         final String urlStr = url.toString();
-//        final OsrmResponse cacheResult = cache.getOrNull(urlStr);
-//        if (cacheResult != null) {
-//            LOGGER.info("url from cache: {}", urlStr);
-//            return new OsrmResponse(cacheResult.distance(), cacheResult.coordinates(),
-//                wayPoints);
-//        }
+        final OsrmResponse cacheResult = cache.getOrNull(urlStr);
+        if (cacheResult != null) {
+            LOGGER.info("url from cache: {}", urlStr);
+            return new OsrmResponse(cacheResult.distance(), cacheResult.coordinates(),
+                wayPoints);
+        }
         LOGGER.info("url: {}", urlStr);
 
         try {
