@@ -35,7 +35,6 @@ public class OsrmAPI implements TripAPI {
     public OsrmAPI() {
         this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS)).build();
         this.cache = new Cache();
-        this.cache.loadCache();
     }
 
     @Override
@@ -50,9 +49,10 @@ public class OsrmAPI implements TripAPI {
      * @param wayPoints The list containing wayPoints in the trip.
      * @return a OsrmResponse.
      */
+    // TODO: add generate_hints=false&skip_waypoints=true
     @Override
     public OsrmResponse generateTrip(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
-        return callAPI("trips", wayPoints, "trip", "bike", "full", "source=first");
+        return callAPI("trips", wayPoints, "trip", "bike", "full", "source=first&roundtrip=true");
     }
 
     @NotNull
@@ -67,17 +67,12 @@ public class OsrmAPI implements TripAPI {
             url.append("&").append(additionalParam);
         }
         final String urlStr = url.toString();
-
-        if (wayPoints.size() == 2) {
-            final OsrmResponse cacheResult = cache.getOrNull(urlStr);
-            if (cacheResult != null) {
-                LOGGER.info("url from cache: {}", urlStr);
-                return new OsrmResponse(cacheResult.distance(), cacheResult.coordinates(),
-                    wayPoints);
-            } else {
-                LOGGER.info("route with 2 points not found in cache");
-            }
-        }
+//        final OsrmResponse cacheResult = cache.getOrNull(urlStr);
+//        if (cacheResult != null) {
+//            LOGGER.info("url from cache: {}", urlStr);
+//            return new OsrmResponse(cacheResult.distance(), cacheResult.coordinates(),
+//                wayPoints);
+//        }
         LOGGER.info("url: {}", urlStr);
 
         try {
@@ -100,9 +95,7 @@ public class OsrmAPI implements TripAPI {
             try {
                 var json = new JSONObject(body);
                 final OsrmResponse result = getResponse(wayPoints, json, name);
-                if (wayPoints.size() == 2) {
-                    cache.write(urlStr, result);
-                }
+                cache.write(urlStr, result);
                 return result;
             } catch (JSONException e) {
                 LOGGER.warn("JSON error, request was: {}\n{}", request, body);
@@ -157,9 +150,5 @@ public class OsrmAPI implements TripAPI {
             }
         }
         return new OsrmResponse(distance_km, coordinates, wayPoints);
-    }
-
-    public void flush() {
-        cache.flush();
     }
 }
