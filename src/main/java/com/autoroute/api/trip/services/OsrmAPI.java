@@ -34,7 +34,7 @@ public class OsrmAPI implements TripAPI {
 
     public OsrmAPI() {
         this.client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS)).build();
-        this.cache = new Cache();
+        this.cache = Cache.CACHE;
     }
 
     @Override
@@ -67,7 +67,7 @@ public class OsrmAPI implements TripAPI {
             url.append("&").append(additionalParam);
         }
         final String urlStr = url.toString();
-        final OsrmResponse cacheResult = cache.getOrNull(urlStr);
+        final OsrmResponse cacheResult = cache.get(urlStr);
         if (cacheResult != null) {
             LOGGER.info("url from cache: {}", urlStr);
             return new OsrmResponse(cacheResult.distance(), cacheResult.coordinates(),
@@ -95,7 +95,7 @@ public class OsrmAPI implements TripAPI {
             try {
                 var json = new JSONObject(body);
                 final OsrmResponse result = getResponse(wayPoints, json, name);
-                cache.write(urlStr, result);
+                cache.put(urlStr, result);
                 return result;
             } catch (JSONException e) {
                 LOGGER.warn("JSON error, request was: {}\n{}", request, body);

@@ -11,7 +11,7 @@ public record OsrmResponse(double distance, List<LatLon> coordinates,
 
     public OsrmResponse(double distance, List<LatLon> coordinates,
                         List<WayPoint> wayPoints) {
-        this(distance, coordinates, wayPoints, null);
+        this(distance, coordinates, wayPoints, -1d);
     }
 
     public OsrmResponse(OsrmResponse response, Double kmPerOneNode) {
@@ -20,5 +20,10 @@ public record OsrmResponse(double distance, List<LatLon> coordinates,
 
     public OsrmResponse withKmPerOneNode(Double kmPerOneNode) {
         return new OsrmResponse(distance, coordinates, wayPoints, kmPerOneNode);
+    }
+
+    @Override
+    public Double kmPerOneNode() {
+        return kmPerOneNode;
     }
 }
