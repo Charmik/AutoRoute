@@ -27,8 +27,14 @@ public class Cache {
     private static final int CACHE_MAX_SIZE = 1 << 13;
 
     private LRUCache cache;
+    private int writeCounter;
 
-    synchronized void loadCache() {
+    public Cache() {
+        loadCache();
+        this.writeCounter = 0;
+    }
+
+    private synchronized void loadCache() {
         LOGGER.info("Start loading cache");
         var startLoadCache = System.nanoTime();
         CACHE_DIR.toFile().mkdirs();
@@ -63,28 +69,15 @@ public class Cache {
 
     synchronized void write(String request, OsrmResponse response) {
         cache.put(request, response);
-        if (cache.size() % 100 == 0) {
-            try {
-                LOGGER.info("Start flushing cache with size: {}", cache.size());
-                final String newFile = CACHE_FILE + "_new";
-                FileOutputStream fos = new FileOutputStream(newFile);
-                ObjectOutputStream oos = new ObjectOutputStream(fos);
-                oos.writeObject(cache);
-                oos.close();
-                Files.move(Paths.get(newFile), CACHE_FILE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            LOGGER.info("Finished flushing cache");
+        writeCounter++;
+        if (writeCounter % 512 == 0) {
+            flush();
         }
     }
 
-    synchronized void flush() {
-        writeToDisk();
-    }
-
-    private void writeToDisk() {
+    private void flush() {
         try {
+            LOGGER.info("flushing the cache...");
             final String newFile = CACHE_FILE + "_new";
             FileOutputStream fos = new FileOutputStream(newFile);
             ObjectOutputStream oos = new ObjectOutputStream(fos);
