@@ -23,7 +23,7 @@ public class AlgorithmIterationStats {
         tryLogStats();
     }
 
-    public synchronized void pushTiming(Long time) {
+    public synchronized void pushTiming(long time) {
         processedIterations++;
         LOGGER.info("time: {} seconds", (double) time / 1000);
     }
