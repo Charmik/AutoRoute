@@ -38,7 +38,7 @@ public class RouteDistanceAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDistanceAlgorithm.class);
     private static final int CORES = Runtime.getRuntime().availableProcessors();
-    private static final int MAX_ITERATIONS = 1000 * CORES;
+    private static final int MAX_ITERATIONS = 10000 * CORES;
     private static final int ITERATION_DIVIDER = MAX_ITERATIONS / 100;
 
     // TODO: moved ThreadPool from here
@@ -208,7 +208,7 @@ public class RouteDistanceAlgorithm {
                     addToErasedPoints(currentWayPoints, erasedPoints);
                     FindStats.increment(FindStats.HAS_START_POINT);
                     // don't check cycle if we made a lot if iterations already
-                } else if (Utils.percent(iteration, MAX_ITERATIONS) < 80 && hasACycle(response.coordinates())) {
+                } else if (Utils.percent(iteration, MAX_ITERATIONS) < 90 && hasACycle(response.coordinates())) {
                     LOGGER.info("route has a Cycle");
                     addToErasedPoints(currentWayPoints, erasedPoints);
                     FindStats.increment(FindStats.HAS_A_CYCLE);
