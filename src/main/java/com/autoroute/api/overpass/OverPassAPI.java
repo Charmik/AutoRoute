@@ -1,6 +1,5 @@
 package com.autoroute.api.overpass;
 
-import com.autoroute.Constants;
 import com.autoroute.osm.Tag;
 import de.westnordost.osmapi.OsmConnection;
 import de.westnordost.osmapi.common.errors.OsmConnectionException;
@@ -68,7 +67,7 @@ public class OverPassAPI {
         query.append("\" radius=\"");
         query.append(radiusMeters);
         query.append("\"/>\n");
-        query.append("<has-kv k=\"highway\" regv=\"trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|bus_guideway|road|busway\"/>\n");
+        query.append("<has-kv k=\"highway\" regv=\"trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|bus_guideway|road|busway|residential\"/>\n");
         query.append("</query>\n");
         query.append("<union>\n");
         query.append("<item/>\n");
@@ -139,40 +138,5 @@ public class OverPassAPI {
             url, "User-Agent: Mozilla/5.0", null, timeout);
         LOGGER.info("Create overpass with url: {}", url);
         return new OverpassMapDataApi(connection);
-    }
-
-    public static void main(String[] args) {
-        final int MAX_KM = 50;
-        final double DIFF_DEGREE = ((double) MAX_KM / Constants.KM_IN_ONE_DEGREE) / 2;
-
-        final com.autoroute.osm.LatLon bor = new com.autoroute.osm.LatLon(59.908977, 29.068520);
-        final Box box = new Box(
-            bor.lat() - DIFF_DEGREE,
-            bor.lon() - DIFF_DEGREE,
-            bor.lat() + DIFF_DEGREE,
-            bor.lon() + DIFF_DEGREE
-        ); // bor
-
-        final OverPassAPI overPassAPI = new OverPassAPI();
-
-//        final List<OverpassResponse> nodes = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
-//        System.out.println("nodes: " + nodes.size());
-//        for (OverpassResponse node : nodes) {
-//            System.out.println(node.latLon() + " " + node.tags());
-//        }
-
-        final List<OverpassResponse> roads =
-            overPassAPI.getRodes(new com.autoroute.osm.LatLon(59.908977, 29.068520), 100000);
-
-        System.out.println("size: " + roads.size());
-//        roads.sort(Comparator.comparing(OverpassResponse::latLon));
-//        String s = "[out:json][timeout:120];\n";
-//        s = s + "(";
-//        for (OverpassResponse resp : roads) {
-//            s = s + "node(" + resp.id() + ");\n";
-//        }
-//        s = s + ");\n";
-//        s = s + "out;";
-//        System.out.println(s);
     }
 }
