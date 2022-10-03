@@ -119,8 +119,7 @@ public class Main {
         LOGGER.info("save a route as: {}", gpxPath);
         GPX.write(gpx, gpxPath);
 
-        Row newRow = new Row(dbRow, State.GOT_ALL_ROUTES);
-        db.updateRow(newRow);
+        db.updateRow(dbRow.withState(State.GOT_ALL_ROUTES));
         telegramBot.sendMessage(chatId,
             "Your routes are ready! You can use this site to look at your route: https://gpx.studio/.\n" +
                 "You need to download generated .gpx file and load it on the site: Load GPX.\n" +
