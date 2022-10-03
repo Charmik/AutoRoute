@@ -47,7 +47,7 @@ public class Cache {
             .keySerializer(Serializer.STRING)
             .valueSerializer(new OsrmResponseSerializer())
             .expireMaxSize(size)
-            .expireAfterCreate()
+            .expireAfterUpdate()
             .createOrOpen();
         LOGGER.info("created cache with size: {}", cache.size());
         this.counter = new AtomicInteger();
