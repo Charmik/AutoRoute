@@ -1,5 +1,6 @@
 package com.autoroute.gpx;
 
+import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
 import io.jenetics.jpx.GPX;
@@ -20,6 +21,36 @@ public class GpxGenerator {
             builder = builder.addWayPoint(b -> b.lat(wayPoint.latLon().lat())
                 .lon(wayPoint.latLon().lon())
                 .name(wayPoint.name()));
+        }
+        return builder.build();
+    }
+
+    public static GPX generateRoute(List<Vertex> vertices) {
+        var builder = GPX.builder()
+            .addTrack(track -> track
+                .addSegment(segment -> {
+                    for (Vertex v : vertices) {
+                        var coordinate = v.getLatLon();
+                        segment.addPoint(p -> p.lat(coordinate.lat()).lon(coordinate.lon()));
+                    }
+                }));
+        return builder.build();
+    }
+
+    public static GPX generate(List<Vertex> vertices) {
+        var builder = GPX.builder();
+        for (Vertex v : vertices) {
+            for (Vertex n : v.getNeighbors()) {
+                builder.addTrack(track -> track
+                    .addSegment(segment -> {
+                        segment.addPoint(p -> p
+                            .lat(v.getLatLon().lat())
+                            .lon(v.getLatLon().lon()));
+                        segment.addPoint(p -> p
+                            .lat(n.getLatLon().lat())
+                            .lon(n.getLatLon().lon()));
+                    }));
+            }
         }
         return builder.build();
     }

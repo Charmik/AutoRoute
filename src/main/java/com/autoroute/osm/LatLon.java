@@ -8,16 +8,22 @@ import java.util.Comparator;
 public record LatLon(double lat, double lon) implements Serializable, Comparable<LatLon> {
 
     public boolean isClosePoint(LatLon other) {
-        double distance = distance(this, other);
+        double distance = distanceKM(this, other);
         return distance < 1;
     }
 
     public boolean isCloseInCity(LatLon other) {
-        double distance = distance(this, other);
+        double distance = distanceKM(this, other);
         return distance < 5;
     }
 
-    private double distance(LatLon l1, LatLon l2) {
+    public static double fastDistance(LatLon l1, LatLon l2) {
+        final double lonDiff = l1.lon - l2.lon;
+        final double latDiff = l1.lat - l2.lat;
+        return lonDiff * lonDiff + latDiff * latDiff;
+    }
+
+    public static double distanceKM(LatLon l1, LatLon l2) {
         double theta = l1.lon - l2.lon;
         double dist = Math.sin(deg2rad(l1.lat)) * Math.sin(deg2rad(l2.lat)) + Math.cos(deg2rad(l1.lat)) * Math.cos(deg2rad(l2.lat)) * Math.cos(deg2rad(theta));
         dist = Math.acos(dist);
@@ -27,11 +33,11 @@ public record LatLon(double lat, double lon) implements Serializable, Comparable
         return dist;
     }
 
-    private double deg2rad(double deg) {
+    private static double deg2rad(double deg) {
         return (deg * Math.PI / 180.0);
     }
 
-    private double rad2deg(double rad) {
+    private static double rad2deg(double rad) {
         return (rad * 180.0 / Math.PI);
     }
 
