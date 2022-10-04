@@ -24,10 +24,6 @@ public class Graph {
         this.vertices = new ArrayList<>(vertices);
     }
 
-    public Graph(Graph other) {
-        this.vertices = other.vertices;
-    }
-
     /*
     public void buildGraph() {
         // TODO: is it possible to optimize?
@@ -66,27 +62,23 @@ public class Graph {
 
         for (Vertex u : neighbors) {
 //            System.out.println("d2: " + LatLon.distanceKM(v.getLatLon(), u.getLatLon()));
-            try {
-                if (!visit[u.getId()]) {
-                    currentWay.add(u);
-                    var res = dfs(u, currentWay, depth + 1, visit, steps);
-                    if (!res.route().isEmpty()) {
-                        return res;
-                    }
-                    currentWay.remove(currentWay.size() - 1);
-                } else {
-                    final int uSteps = steps[u.getId()];
-                    assert uSteps != -1;
-                    if (depth > uSteps) {
-                        final int diffDepth = depth - uSteps;
-                        if (diffDepth > 30) {
-                            currentWay.add(u);
-                            return new Cycle(currentWay, u, v);
-                        }
+            if (!visit[u.getId()]) {
+                currentWay.add(u);
+                var res = dfs(u, currentWay, depth + 1, visit, steps);
+                if (!res.route().isEmpty()) {
+                    return res;
+                }
+                currentWay.remove(currentWay.size() - 1);
+            } else {
+                final int uSteps = steps[u.getId()];
+                assert uSteps != -1;
+                if (depth > uSteps) {
+                    final int diffDepth = depth - uSteps;
+                    if (diffDepth > 30) {
+                        currentWay.add(u);
+                        return new Cycle(currentWay, u, v);
                     }
                 }
-            } catch (Throwable t) {
-                System.out.println(t);
             }
         }
         return Cycle.empty();
@@ -317,7 +309,7 @@ public class Graph {
                             }
                             vertices.remove(removeVertex);
                         }
-                        break;
+                        break; // can be removed for perf
                     }
 
                 }
