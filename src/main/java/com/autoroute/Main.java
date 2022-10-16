@@ -2,7 +2,6 @@ package com.autoroute;
 
 import com.autoroute.api.overpass.Box;
 import com.autoroute.api.overpass.OverPassAPI;
-import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.gpx.GpxGenerator;
 import com.autoroute.gpx.RouteDuplicateDetector;
 import com.autoroute.logistic.PointVisiter;
@@ -34,7 +33,6 @@ import java.util.Properties;
 public class Main {
 
     private static final Logger LOGGER = LogManager.getLogger(Main.class);
-    private static final double DEFAULT_KM_PER_ONE_NODE = 20;
 
     private void run() {
 
@@ -67,26 +65,24 @@ public class Main {
     }
 
     private static void handleRouteRequest(Database db, Bot telegramBot, TagsFileReader tagsReader, Row dbRow) throws IOException {
-        double kmPerNode = DEFAULT_KM_PER_ONE_NODE;
         LOGGER.info("got a row: {}", dbRow);
         final LatLon startPoint = dbRow.startPoint();
         List<WayPoint> wayPoints = readNodes(startPoint, tagsReader, dbRow);
-        if (wayPoints.size() > 500) {
-            LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
-            tagsReader.readTags("short_list_tags.txt");
-            wayPoints = readNodes(startPoint, tagsReader, dbRow);
-        }
+//        if (wayPoints.size() > 500) {
+//            LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
+//            tagsReader.readTags("short_list_tags.txt");
+//            wayPoints = readNodes(startPoint, tagsReader, dbRow);
+//        }
 
         final String user = String.valueOf(dbRow.id());
         var pointVisiter = new PointVisiter();
-        var duplicate = new RouteDuplicateDetector();
 
-        final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(duplicate, user);
+        final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(user);
 
         final int minDistance = dbRow.minDistance();
         final int maxDistance = dbRow.maxDistance();
-        var response = routeDistanceAlgorithm.buildRoute(
-            minDistance, maxDistance, wayPoints, kmPerNode, pointVisiter, 5);
+        var response = routeDistanceAlgorithm.buildRoute(startPoint,
+            minDistance, maxDistance, wayPoints, pointVisiter, 5);
         final long chatId = dbRow.chatId();
         if (response == null) {
             LOGGER.info("got response = null for row: {}", dbRow);
@@ -95,7 +91,6 @@ public class Main {
                 "with your criteria:( Please provide another distances or start point");
             return;
         }
-        kmPerNode = response.kmPerOneNode();
 
         LOGGER.info("Start visit waypoints from the route");
 
@@ -171,13 +166,11 @@ public class Main {
 
         List<WayPoint> wayPoints = new ArrayList<>();
 
-        wayPoints.add(new WayPoint(-1, startPoint, "Start"));
-
         Map<Tag, Integer> tagToCounterStats = new HashMap<>();
         StringBuilder debugQuireByIds = new StringBuilder("[out:json][timeout:120];\n");
         debugQuireByIds.append("(");
-        for (OverpassResponse response : overpassResponse) {
-            var tags = response.tags();
+        for (var node : overpassResponse.getNodes()) {
+            var tags = node.tags();
             // filter only drinking water
             if (tags.containsKey("natural")) {
                 if ("spring".equals(tags.get("natural"))) {
@@ -188,8 +181,8 @@ public class Main {
                     }
                 }
             }
-            debugQuireByIds.append("node(").append(response.id()).append(");");
-            wayPoints.add(new WayPoint(response.id(), response.latLon(), response.getName()));
+            debugQuireByIds.append("node(").append(node.id()).append(");");
+            wayPoints.add(new WayPoint(node.id(), node.latLon(), node.getName()));
 
 
             for (Map.Entry<String, String> entry : tags.entrySet()) {

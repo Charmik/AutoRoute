@@ -14,7 +14,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -34,7 +33,17 @@ public class OverPassAPI {
 
     }
 
-    public List<OverpassResponse> getNodesInBoxByTags(@NotNull Box box, Set<Tag> tags) {
+    public OverpassResponse getCities(@NotNull Box box, Set<Tag> tags) {
+        StringBuilder query = new StringBuilder("[out:json][timeout:25];\n");
+
+
+        LOGGER.info("query:\n{}", query);
+//        return executeQuery(query);
+
+        return null;
+    }
+
+    public OverpassResponse getNodesInBoxByTags(@NotNull Box box, Set<Tag> tags) {
         StringBuilder query = new StringBuilder("<osm-script timeout=\"120\" element-limit=\"1073741824\">\n")
             .append("<union>\n");
         for (Tag tag : tags) {
@@ -57,7 +66,7 @@ public class OverPassAPI {
         return executeQuery(query);
     }
 
-    public List<OverpassResponse> getRodes(@NotNull com.autoroute.osm.LatLon center, int radiusMeters) {
+    public OverpassResponse getRodes(@NotNull com.autoroute.osm.LatLon center, int radiusMeters) {
         StringBuilder query = new StringBuilder("<osm-script timeout=\"120\" element-limit=\"1073741824\">\n");
         query.append("<query type=\"way\">\n");
         query.append("<around lat=\"");
@@ -67,7 +76,7 @@ public class OverPassAPI {
         query.append("\" radius=\"");
         query.append(radiusMeters);
         query.append("\"/>\n");
-        query.append("<has-kv k=\"highway\" regv=\"trunk|primary|secondary|tertiary|motorway_link|trunk_link|primary_link|secondary_link|bus_guideway|road|busway|residential\"/>\n");
+        query.append("<has-kv k=\"highway\" regv=\"trunk|primary|secondary|tertiary|trunk_link|primary_link|secondary_link|bus_guideway|road|busway|residential\"/>\n");
         query.append("</query>\n");
         query.append("<union>\n");
         query.append("<item/>\n");
@@ -80,8 +89,8 @@ public class OverPassAPI {
     }
 
     @NotNull
-    private static List<OverpassResponse> executeQuery(StringBuilder query) {
-        List<OverpassResponse> responses = new ArrayList<>();
+    private static OverpassResponse executeQuery(StringBuilder query) {
+        OverpassResponse response = new OverpassResponse();
 
         final MapDataHandler handler = new MapDataHandler() {
             @Override
@@ -92,15 +101,17 @@ public class OverPassAPI {
             @Override
             public void handle(de.westnordost.osmapi.map.data.Node node) {
                 var position = node.getPosition();
-
-                var response = new OverpassResponse(node.getId(), node.getTags(),
+                var n = new Node(node.getId(), node.getTags(),
                     new com.autoroute.osm.LatLon(position.getLatitude(), position.getLongitude()));
-                responses.add(response);
+                response.add(n);
             }
 
             @Override
             public void handle(Way way) {
-                // TODO: implement if necessary for roads
+                final List<Long> nodesList = way.getNodeIds();
+                long[] nodes = nodesList.stream().mapToLong(i -> i).toArray();
+                var w = new com.autoroute.api.overpass.Way(way.getId(), nodes, way.getTags());
+                response.add(w);
             }
 
             @Override
@@ -113,6 +124,7 @@ public class OverPassAPI {
             .until(() -> {
                 try {
                     OverpassMapDataApi overpass = createOverpass();
+
                     overpass.queryElements(query.toString(), handler);
 
                     return true;
@@ -127,7 +139,7 @@ public class OverPassAPI {
             .limitIterationsTo(20)
             .backoff(Duration.FIVE_SECONDS, 2, Duration.ONE_MINUTE)
             .run();
-        return responses;
+        return response;
     }
 
     @NotNull

@@ -18,7 +18,7 @@ public class GpxGenerator {
                     }
                 }));
         for (WayPoint wayPoint : wayPoints) {
-            builder = builder.addWayPoint(b -> b.lat(wayPoint.latLon().lat())
+            builder.addWayPoint(b -> b.lat(wayPoint.latLon().lat())
                 .lon(wayPoint.latLon().lon())
                 .name(wayPoint.name()));
         }
@@ -50,6 +50,12 @@ public class GpxGenerator {
                             .lat(n.getLatLon().lat())
                             .lon(n.getLatLon().lon()));
                     }));
+            }
+            if (v.getNeighbors().isEmpty()) {
+                builder.addWayPoint(b -> b
+                    .lat(v.getLatLon().lat())
+                    .lon(v.getLatLon().lon())
+                    .name(String.valueOf(v.getIdentificator())));
             }
         }
         return builder.build();

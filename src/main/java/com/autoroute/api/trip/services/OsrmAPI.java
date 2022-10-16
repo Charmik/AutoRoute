@@ -3,6 +3,7 @@ package com.autoroute.api.trip.services;
 import com.autoroute.api.trip.TripAPI;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
+import org.apache.brooklyn.util.repeat.Repeater;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -41,9 +42,9 @@ public class OsrmAPI implements TripAPI {
     }
 
     @Override
-    public OsrmResponse generateTripBetweenTwoPoints(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
-        assert wayPoints.size() == 2;
-        return callAPI("routes", wayPoints, "route", "bike", "false");
+    public OsrmResponse generateRoute(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
+        return callAPI("routes", wayPoints, "route", "bike", "full",
+            "continue_straight=true"); // try to change?
     }
 
     /**
@@ -55,12 +56,12 @@ public class OsrmAPI implements TripAPI {
     // TODO: add generate_hints=false&skip_waypoints=true
     @Override
     public OsrmResponse generateTrip(List<WayPoint> wayPoints) throws TooManyCoordinatesException, HttpTimeoutException {
-        return callAPI("trips", wayPoints, "trip", "bike", "full", "source=first&roundtrip=true");
+        return callAPI("trips", wayPoints, "trip", "foot", "simplified", "source=first&roundtrip=true");
     }
 
     @NotNull
     private OsrmResponse callAPI(String name, List<WayPoint> wayPoints, String service, String profile,
-                                 String overview, String... additionalParams) throws TooManyCoordinatesException, HttpTimeoutException {
+                                 String overview, String... additionalParams) {
 
         var stringCoordinates = buildStringCoordinates(wayPoints);
         StringBuilder url = new StringBuilder(String.format("http://router.project-osrm.org/" + service + "/v1/" + profile +
@@ -78,44 +79,52 @@ public class OsrmAPI implements TripAPI {
         }
         LOGGER.info("url: {}", urlStr);
 
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI(urlStr))
-                .header("accept", "application/json")
-                .GET()
-                .timeout(Duration.of(TIMEOUT_SECONDS, ChronoUnit.SECONDS))
-                .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            final String body = response.body();
-            if (body.contains("Too many trip coordinates") || body.contains("URI Too Large")) {
-                LOGGER.info("got too many coordinated: {}, try to decrease", wayPoints.size());
-                throw new TooManyCoordinatesException("too many coordinates: " + wayPoints.size());
-            }
-            if (body.contains("You have been temporarily blocked")) {
-                LOGGER.warn("ban because of too many requests");
-                throw new RuntimeException();
-            }
-            try {
-                var json = new JSONObject(body);
-                final OsrmResponse result = getResponse(wayPoints, json, name);
-                cache.put(urlStr, result);
-                return result;
-            } catch (JSONException e) {
-                LOGGER.warn("JSON error, request was: {}\n{}", request, body);
-                throw new RuntimeException("couldn't parse JSON: " + body, e);
-            }
-        } catch (HttpTimeoutException e) {
-            throw e;
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException("Couldn't create URI from url: " + url, e);
-        } catch (IOException e) {
-            if (e instanceof HttpTimeoutException) {
-                throw (HttpTimeoutException) e;
-            }
-            throw new RuntimeException("couldn't read result from request", e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException("request was interrupted", e);
-        }
+
+        OsrmResponse[] result = new OsrmResponse[1];
+        Repeater.create("Wait to get data by OverPass API")
+            .until(() -> {
+                try {
+                    HttpRequest request = HttpRequest.newBuilder()
+                        .uri(new URI(urlStr))
+                        .header("accept", "application/json")
+                        .GET()
+                        .timeout(Duration.of(TIMEOUT_SECONDS, ChronoUnit.SECONDS))
+                        .build();
+                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    final String body = response.body();
+                    if (body.contains("Too many trip coordinates") || body.contains("URI Too Large")) {
+                        LOGGER.info("got too many coordinated: {}, try to decrease", wayPoints.size());
+                        throw new TooManyCoordinatesException("too many coordinates: " + wayPoints.size());
+                    }
+                    if (body.contains("You have been temporarily blocked")) {
+                        LOGGER.warn("ban because of too many requests");
+                        return false;
+                    }
+                    try {
+                        var json = new JSONObject(body);
+                        final OsrmResponse r = getResponse(wayPoints, json, name);
+                        cache.put(urlStr, r);
+                        result[0] = r;
+                        return true;
+                    } catch (JSONException e) {
+                        LOGGER.warn("JSON error, request was: {}\n{}", request, body);
+                        throw new RuntimeException("couldn't parse JSON: " + body, e);
+                    }
+                } catch (URISyntaxException e) {
+                    throw new IllegalArgumentException("Couldn't create URI from url: " + url, e);
+                } catch (IOException e) {
+                    LOGGER.warn("couldn't read from request", e);
+                    return false;
+                } catch (InterruptedException e) {
+                    LOGGER.warn("request was interrupted", e);
+                    return false;
+                }
+            })
+            .limitIterationsTo(5)
+            .backoff(org.apache.brooklyn.util.time.Duration.FIVE_SECONDS, 2, org.apache.brooklyn.util.time.Duration.ONE_MINUTE)
+            .run();
+        assert result[0] != null;
+        return result[0];
     }
 
     @NotNull

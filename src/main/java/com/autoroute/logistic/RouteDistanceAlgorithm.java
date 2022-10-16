@@ -1,45 +1,43 @@
 package com.autoroute.logistic;
 
+import com.autoroute.api.overpass.OverPassAPI;
+import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.api.trip.services.OsrmAPI;
 import com.autoroute.api.trip.services.OsrmResponse;
 import com.autoroute.api.trip.services.TooManyCoordinatesException;
-import com.autoroute.gpx.GpxGenerator;
-import com.autoroute.gpx.RouteDuplicateDetector;
+import com.autoroute.logistic.rodes.Cycle;
+import com.autoroute.logistic.rodes.DijkstraAlgorithm;
+import com.autoroute.logistic.rodes.Graph;
+import com.autoroute.logistic.rodes.GraphBuilder;
+import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
 import com.autoroute.utils.Utils;
-import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.IOException;
+import java.io.File;
 import java.net.http.HttpTimeoutException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class RouteDistanceAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDistanceAlgorithm.class);
-    private static final int CORES = Runtime.getRuntime().availableProcessors();
-    private static final int MAX_ITERATIONS = 10000 * CORES;
-    private static final int ITERATION_DIVIDER = MAX_ITERATIONS / 100;
+    private static final int CORES = 1; //Runtime.getRuntime().availableProcessors();
+    private static final double DEFAULT_KM_PER_ONE_NODE = 20;
 
     // TODO: moved ThreadPool from here
 
@@ -47,232 +45,200 @@ public class RouteDistanceAlgorithm {
     private static final ExecutorService ALGORITHM_POOL = Executors.newFixedThreadPool(CORES);
 
     private final OsrmAPI osrmAPI;
-    private final RouteDuplicateDetector duplicate;
+    private final OverPassAPI overPassAPI;
     private final String user; // TODO: delete this field and move logic inside PointVisitor
-    private final AlgorithmIterationStats iterationStats;
-    private int debugIndexCount = 0;
 
-    public RouteDistanceAlgorithm(RouteDuplicateDetector duplicate, String user) {
+    public RouteDistanceAlgorithm(String user) {
         this.user = user;
         this.osrmAPI = new OsrmAPI();
-        this.duplicate = duplicate;
-        this.iterationStats = new AlgorithmIterationStats();
+        this.overPassAPI = new OverPassAPI();
     }
 
     @Nullable
-    public OsrmResponse buildRoute(double minDistance,
-                                   double maxDistance,
-                                   final List<WayPoint> originalWayPoints,
-                                   double kmPerOneNode,
+    public OsrmResponse buildRoute(LatLon start,
+                                   int minDistance,
+                                   int maxDistance,
+                                   final List<WayPoint> wayPoints,
                                    PointVisiter pointVisiter,
                                    int threads) {
         LOGGER.info("Start buildRoute");
-        CompletionService<OsrmResponse> completionService =
-            new ExecutorCompletionService<>(ALGORITHM_POOL);
 
-        AtomicBoolean completed = new AtomicBoolean(false);
-        // don't need to do it every route
-        List<WayPoint> currentWayPoints = filterWayPoints(maxDistance, originalWayPoints, pointVisiter);
-        iterationStats.startProcessing();
-        for (int i = 0; i < threads; i++) {
-            var threadLocalWayPoints = new ArrayList<>(currentWayPoints);
-            completionService.submit(() -> buildRoute(
-                minDistance, maxDistance, kmPerOneNode, threadLocalWayPoints, completed));
-        }
-
-        try {
-            for (int i = 0; i < threads; i++) {
-                var response = completionService.take().get();
-                LOGGER.info("thread: {} got response is null: {}",
-                    i, response == null);
-                if (response != null) {
-                    return response;
-                }
-            }
-        } catch (InterruptedException e) {
-            return null;
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        } finally {
-            iterationStats.endProcessing();
-        }
-        return null;
+//        final OverpassResponse response =
+//            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistance * 1000);
+//                Utils.writeVertecesToFile(response);
+        final OverpassResponse response = Utils.readVertices();
+        return buildRoute(response, start, minDistance, maxDistance, wayPoints);
     }
 
     /**
      * Build a route with the given distance restrictions via the given way points.
      *
+     * @param response
+     * @param start            Start points of the route
      * @param minDistance      the minimum distance of the trip.
      * @param maxDistance      the maximum distance of the trip.
-     * @param currentWayPoints [0] is a start point, we can't erase it.
+     * @param currentWayPoints waypoints
      */
     @Nullable
-    private OsrmResponse buildRoute(double minDistance,
-                                    double maxDistance,
-                                    double originalKmPerOneNode,
-                                    final List<WayPoint> currentWayPoints,
-                                    AtomicBoolean completed) {
+    private OsrmResponse buildRoute(OverpassResponse response,
+                                    LatLon start,
+                                    int minDistance,
+                                    int maxDistance,
+                                    final List<WayPoint> currentWayPoints) {
 
-        if (currentWayPoints.isEmpty() || currentWayPoints.size() == 1) {
-            throw new IllegalArgumentException("can't build route without way points");
+//        start = new LatLon(34.7657, 32.8728);
+//        LatLon finish = new LatLon(34.7762, 32.9380);
+//        Graph fullGraph = GraphBuilder.buildFullGraph(response, start, minDistance, maxDistance);
+//        final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
+//        var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
+//        dijkstra.run();
+//        System.out.println(dijkstra.getDistance(fullGraph.findNearestVertex(finish)));
+//        System.exit(42);
+
+
+        Graph fullGraph = GraphBuilder.buildFullGraph(response, start, minDistance, maxDistance);
+        final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
+        var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
+        dijkstra.run();
+
+
+        Graph compactGraph = GraphBuilder.buildGraph(response, start,
+            startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
+        compactGraph.setFullGraph(fullGraph);
+        final List<Cycle> cycles = new ArrayList<>();
+        // AtomicBoolean stoppedFindingCycles = new AtomicBoolean(false);
+        // TODO: try add waypoints inside in parallel. and build routes. return result as a parameter...:(
+        // osrmRouteFromCycles(minDistance, maxDistance, start, cycles, stoppedFindingCycles);
+        var startVertexCompactGraph = compactGraph.findNearestVertex(start);
+
+
+        assert startVertexFullGraph.getIdentificator() == startVertexCompactGraph.getIdentificator();
+        compactGraph.calculateSuperVertices();
+        generateCyclesFromGraph(cycles, minDistance, maxDistance, startVertexCompactGraph, compactGraph, dijkstra);
+
+
+//        stoppedFindingCycles.set(true);
+//        while (stoppedFindingCycles.get()) {
+//            Utils.sleep(5000);
+//        }
+
+        for (Cycle cycle : cycles) {
+
         }
-        var firstElementDebug = currentWayPoints.get(0);
-        double kmPerOneNode = originalKmPerOneNode;
-        List<WayPoint> erasedPoints = new ArrayList<>();
-        while (currentWayPoints.size() > 1) {
-            erasedPoints.add(currentWayPoints.get(currentWayPoints.size() - 1));
-            currentWayPoints.remove(currentWayPoints.size() - 1);
-        }
-        int iteration = 0;
-        while (iteration < MAX_ITERATIONS) {
-            iteration++;
-            long startIterationTime = System.currentTimeMillis();
-            assert firstElementDebug.equals(currentWayPoints.get(0)); // operations should never change first element
-            // every 1/100 iteration we increase kmPerOneNode by X%
-            assert MAX_ITERATIONS >= 100;
 
-            if (Utils.percent(iteration, MAX_ITERATIONS) > 50 &&
-                iteration % (MAX_ITERATIONS / (MAX_ITERATIONS / ITERATION_DIVIDER)) == 0) {
-                // TODO: add test that increasing should be enough to get max distance
-                kmPerOneNode *= 1.03;
-                kmPerOneNode = Math.min(kmPerOneNode, maxDistance);
-                LOGGER.info("couldn't build a route for {} iterations. increase kmPerOneNode to: {},",
-                    iteration, kmPerOneNode);
-            }
-
-            if (completed.get()) {
-                return null;
-            }
-            try {
-                while (currentWayPoints.size() == 1 || currentWayPoints.size() < minDistance / kmPerOneNode) {
-                    if (erasedPoints.isEmpty()) {
-                        LOGGER.info("don't have nodes to erase. Exit");
-                        return null;
-                    }
-                    addToCurrentPoints(currentWayPoints, erasedPoints);
-                }
-                LOGGER.info("Start generate trip from: {} points, removed: {}, iteration: {}",
-                    currentWayPoints.size(), erasedPoints.size(), iteration);
-                // probably we tried all routes
-                final int pointsTogether = (currentWayPoints.size()) + erasedPoints.size();
-                if (pointsTogether < 50) {
-                    final long routeVariants = (1L << pointsTogether);
-                    if (iteration > routeVariants) {
-                        LOGGER.info("stop building because we tried: {} iterations by: {}. points: {}",
-                            iteration, routeVariants, pointsTogether);
-                        return null;
-                    }
-                }
-                // can we use fast generateTrip without coordinates just for distance and when found a route - use full mode? Is it faster?
-                OsrmResponse response = osrmAPI.generateTrip(currentWayPoints);
-                LOGGER.info("got response distance: {}", response.distance());
-                if (response.distance() < minDistance) {
-                    LOGGER.info("got too small distance: {}, add 1 node", response.distance());
-                    if (erasedPoints.isEmpty()) {
-                        LOGGER.info("Can't build a route with given waypoints");
-                        return null;
-                    }
-                    addToCurrentPoints(currentWayPoints, erasedPoints);
-                    FindStats.increment(FindStats.TOO_SMALL);
-                } else if (response.distance() > maxDistance) {
-                    int diffDistance = (int) (response.distance() - maxDistance);
-                    int removeNodesCount = ((int) (diffDistance / kmPerOneNode * 3)) + 1;
-                    if (removeNodesCount > currentWayPoints.size()) {
-                        removeNodesCount = (currentWayPoints.size() / 2) + 1;
-                    }
-                    if (currentWayPoints.size() < 5) {
-                        removeNodesCount = 1;
-                    }
-                    LOGGER.info("got too big distance: {}, diff: {}, remove: {} nodes",
-                        response.distance(), diffDistance, removeNodesCount);
-//                    // ERASE WAYPOINTS WITH MAX DISTANCE FIRST
-//                    for (int i = 0; i < removeNodesCount; i++) {
-//                        int maxDistancePointIndex = 1;
-//                        for (int j = 2; j < currentWayPoints.size(); j++) {
-//                            if (currentWayPoints.get(j))
-//                        }
-//                    }
-
-                    for (int i = 0; i < removeNodesCount; i++) {
-                        addToErasedPoints(currentWayPoints, erasedPoints);
-                    }
-                    FindStats.increment(FindStats.TOO_BIG);
-                } else if (response.distance() / response.wayPoints().size() > kmPerOneNode) {
-                    LOGGER.info("distance: {} has only {} nodes. Try to add more nodes",
-                        response.distance(), response.wayPoints().size());
-                    addToCurrentPoints(currentWayPoints, erasedPoints);
-                    FindStats.increment(FindStats.NOT_ENOUGH_NODES);
-                } else if (hasPointViaStartWaypoint(response.coordinates())) {
-                    LOGGER.info("route has points via Start, try to erase a point");
-                    // TODO: more longer path can be not via Start point. Can we just add points here sometimes?
-                    addToErasedPoints(currentWayPoints, erasedPoints);
-                    FindStats.increment(FindStats.HAS_START_POINT);
-                    // don't check cycle if we made a lot if iterations already
-                } else if (Utils.percent(iteration, MAX_ITERATIONS) < 90 && hasACycle(response.coordinates())) {
-                    LOGGER.info("route has a Cycle");
-                    addToErasedPoints(currentWayPoints, erasedPoints);
-                    FindStats.increment(FindStats.HAS_A_CYCLE);
-                } else if (routeIsDuplicate(response)) {
-                    LOGGER.info("route is a duplicate. Clear up everything");
-                    while (currentWayPoints.size() > 1) {
-                        addToErasedPoints(currentWayPoints, erasedPoints);
-                    }
-                    FindStats.increment(FindStats.DUPLICATE);
-                } else {
-                    if (!completed.compareAndSet(false, true)) {
-                        return null;
-                    }
-                    response = addWaypointsAsManyAsPossible(
-                        maxDistance, currentWayPoints, erasedPoints, originalKmPerOneNode, response);
-                    LOGGER.info("Found a route with: {} waypoints!", response.wayPoints().size());
-                    return response.withKmPerOneNode(kmPerOneNode);
-                }
-                iterationStats.pushTiming(System.currentTimeMillis() - startIterationTime);
-                if (iteration % 50 == 0) {
-                    FindStats.printStats();
-                }
-                iterationStats.tryLogStats();
-                //saveDebugTrack(response);
-            } catch (HttpTimeoutException e) {
-                LOGGER.info("Sleep for a while. got timeout from points: {}", currentWayPoints);
-                try {
-                    Thread.sleep(60 * 1000);
-                } catch (InterruptedException ex) {
-                    throw new RuntimeException(ex);
-                }
-            } catch (TooManyCoordinatesException e) {
-                int erase = 1;
-                erase += currentWayPoints.size() / 2;
-                for (int i = 0; i < erase; i++) {
-                    addToCurrentPoints(erasedPoints, currentWayPoints);
-                }
-                LOGGER.info("got TooManyCoordinatesException with length: {} erase: {}"
-                    , currentWayPoints.size(), erase);
-            }
-        }
         return null;
     }
 
-    void saveDebugTrack(OsrmResponse response) {
-        Paths.get("debug").toFile().mkdirs();
-        var gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
-        final String debugFileName = "debug/" + ((debugIndexCount++) % 50) + ".gpx";
-        final Path tmpPath = Paths.get(debugFileName);
-        try {
-            GPX.write(gpx, tmpPath);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+    private static void generateCyclesFromGraph(List<Cycle> cycles,
+                                                int minDistance,
+                                                int maxDistance,
+                                                Vertex startVertex,
+                                                Graph g,
+                                                DijkstraAlgorithm dijkstra) {
+        LOGGER.info("Final graph has: {} vertices", g.getVertices().size());
+
+        int tries = 0;
+        g.calculateDistanceForNeighbours();
+        int newSize;
+        do {
+            int oldSize = cycles.size();
+            g.findAllCycles(startVertex, cycles, dijkstra);
+            // TODO: remove it!? check in cycle finding...
+//                var it = cycles.iterator();
+//                while (it.hasNext()) {
+//                    final Cycle c = it.next();
+//                    final double d = distanceToCycle(startVertex, c) + distanceOfCycle(c);
+//                    if (d > maxDistance) {
+//                        it.remove();
+////                        System.exit(43);
+//                    }
+//                }
+            newSize = cycles.size();
+            if (cycles.size() > oldSize) {
+                for (int i = oldSize; i < cycles.size(); i++) {
+                    var cycle = cycles.get(i);
+                    new File("o/cycles").mkdirs();
+                    Utils.writeGPX(cycle.vertices(), "cycles/cycle", i);
+                    LOGGER.info("wrote a cycle: {} with: {} vertexes", i, cycle.size());
+
+                    dijkstra.assertStartVertex(startVertex);
+                    double minDistanceToCycle = Double.MAX_VALUE;
+                    Vertex closestVertex = null;
+                    int indexClosestVertex = -1;
+                    for (int j = 0; j < cycle.vertices().size(); j++) {
+                        Vertex v = cycle.vertices().get(j);
+                        final double distanceToV = dijkstra.getDistance(v);
+                        if (distanceToV < minDistanceToCycle) {
+                            minDistanceToCycle = distanceToV;
+                            closestVertex = v;
+                            indexClosestVertex = j;
+                        }
+                    }
+                    assert closestVertex != null;
+                    assert indexClosestVertex != -1;
+                    final List<Vertex> routeToCycle = dijkstra.getRouteFromFullGraph(closestVertex);
+//                        Utils.writeGPX(routeToCycle, "orig2_", i);
+                    assert routeToCycle.get(routeToCycle.size() - 1).getIdentificator() == closestVertex.getIdentificator();
+
+                    final List<Vertex> fullRoute = new ArrayList<>(routeToCycle);
+                    int j = (indexClosestVertex + 1) % cycle.vertices().size();
+                    while (j != indexClosestVertex) {
+                        fullRoute.add(cycle.vertices().get(j));
+                        j = (j + 1) % cycle.vertices().size();
+                    }
+                    // TODO: routeToCycle += original routeToCycle reversed
+//                        Utils.writeGPX(routeToCycle, "orig3_", i);
+
+                    Collections.reverse(routeToCycle);
+                    fullRoute.addAll(routeToCycle);
+                    Utils.writeGPX(fullRoute, "route_", i);
+
+                }
+                tries = 0;
+            }
+            tries++;
+            if (tries % 10 == 0) {
+                LOGGER.info("build cycles tries: {}", tries);
+            }
+        } while (tries != 300 && newSize < 500);
+
+        LOGGER.info("findAllCycles finished, found: {} cycles", cycles.size());
+    }
+
+    private static double distanceToCycle(Vertex startVertex, Cycle cycle) {
+        assert !cycle.vertices().isEmpty();
+        double minDistance = Double.MAX_VALUE;
+        Vertex best = cycle.vertices().get(0);
+        for (Vertex v : cycle.vertices()) {
+            final double d = LatLon.distanceKM(startVertex.getLatLon(), v.getLatLon());
+            if (d < minDistance) {
+                minDistance = d;
+                best = v;
+            }
         }
-        LOGGER.info("Found waypoint close to start. Erase random point. {}", debugFileName);
+        return minDistance;
+    }
+
+    private static double distanceOfCycle(Cycle cycle) {
+        final List<Vertex> vertices = cycle.vertices();
+        if (vertices.size() < 2) {
+            LOGGER.warn("have cycle size size: {}, cycle: {}", vertices.size(), cycle);
+            throw new IllegalArgumentException();
+        }
+        double d = LatLon.distanceKM(vertices.get(0).getLatLon(), vertices.get(1).getLatLon());
+        for (int i = 1; i < vertices.size(); i++) {
+            d += LatLon.distanceKM(vertices.get(i - 1).getLatLon(), vertices.get(i).getLatLon());
+        }
+        d += LatLon.distanceKM(vertices.get(vertices.size() - 1).getLatLon(), vertices.get(0).getLatLon());
+        return d;
     }
 
     // TODO: can be done in parallel
     private OsrmResponse addWaypointsAsManyAsPossible(double maxDistance,
                                                       List<WayPoint> currentWayPoints,
                                                       List<WayPoint> erasedPoints,
-                                                      double kmPerOneNode,
                                                       OsrmResponse response) throws TooManyCoordinatesException {
-        int maxNodesAdd = (int) (maxDistance / kmPerOneNode);
+        int maxNodesAdd = (int) (maxDistance / DEFAULT_KM_PER_ONE_NODE);
         LOGGER.info("try to add waypoints to the route with distance: {}. Current waypoints: {}. Can add more: {}",
             response.distance(), currentWayPoints.size(), maxNodesAdd);
 
@@ -360,7 +326,6 @@ public class RouteDistanceAlgorithm {
     private List<WayPoint> filterWayPoints(double maxDistance, List<WayPoint> originalWayPoints, PointVisiter pointVisiter) {
         LOGGER.info("Start filtering waypoints");
         var filteredPoints = new ArrayList<>(originalWayPoints.stream()
-            .skip(1)
             .filter(point -> !pointVisiter.isVisited(user, point))
             .toList());
         filteredPoints.add(0, originalWayPoints.get(0));
@@ -374,7 +339,7 @@ public class RouteDistanceAlgorithm {
                 twoPoints.add(filteredPoints.get(0));
                 twoPoints.add(wayPoint);
                 try {
-                    final OsrmResponse response = osrmAPI.generateTripBetweenTwoPoints(twoPoints);
+                    final OsrmResponse response = osrmAPI.generateRoute(twoPoints);
                     final int newCount = count.addAndGet(1);
                     LOGGER.info("filtering waypoints: {}/{}", newCount, filteredPoints.size());
                     return response;
@@ -451,28 +416,6 @@ public class RouteDistanceAlgorithm {
             if (point.isCloseInCity(startPoint)) {
                 return true;
             }
-        }
-        return false;
-    }
-
-    private boolean hasACycle(List<LatLon> points) {
-        int startIndex = (int) (((double) points.size()) / 100 * 10);
-        int finishIndex = (int) (((double) points.size()) / 100 * 90);
-
-        int count = 0;
-        int eliminate_points = 50;
-        for (int i = startIndex; i <= finishIndex; i++) {
-            for (int j = i + eliminate_points; j <= finishIndex; j++) {
-                if (points.get(i).isClosePoint(points.get(j))) {
-                    count++;
-                    break;
-                }
-            }
-        }
-        LOGGER.info("found: {} similar points from: {}", count, finishIndex - startIndex);
-        // 10% of the route can go back
-        if (count > (finishIndex - startIndex - eliminate_points) / 100 * 10) {
-            return true;
         }
         return false;
     }

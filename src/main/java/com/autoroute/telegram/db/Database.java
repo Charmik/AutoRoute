@@ -32,7 +32,7 @@ public class Database {
             CREATE TABLE IF NOT EXISTS telegram (
             id SERIAL,
             chat_id BIGINT PRIMARY KEY,
-            user_name TEXT, 
+            user_name TEXT,
             date bigint NOT NULL,
             state INT NOT NULL,
             lat decimal,

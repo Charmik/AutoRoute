@@ -1,23 +1,32 @@
 package com.autoroute.api.overpass;
 
-import com.autoroute.osm.LatLon;
+import java.util.ArrayList;
+import java.util.List;
 
-import java.util.Map;
+public class OverpassResponse {
 
-public record OverpassResponse(long id, Map<String, String> tags, LatLon latLon) {
+    private final List<Node> nodes;
+    private final List<Way> ways;
 
-    public String getName() {
-        if (tags.containsKey("name")) {
-            return tags.get("name");
-        }
-        StringBuilder name = new StringBuilder();
-        for (Map.Entry<String, String> entry : tags.entrySet()) {
-            name.append(entry.getKey())
-                .append(":")
-                .append(entry.getValue())
-                .append("\n");
-        }
-        return name.toString();
+    public OverpassResponse() {
+        this.nodes = new ArrayList<>();
+        this.ways = new ArrayList<>();
     }
 
+    public void add(Node node) {
+        nodes.add(node);
+    }
+
+    public void add(Way way) {
+        ways.add(way);
+    }
+
+    public List<Node> getNodes() {
+        return nodes;
+    }
+
+    public List<Way> getWays() {
+        return ways;
+    }
 }
+

@@ -9,7 +9,7 @@ import java.util.List;
 
 public interface TripAPI {
 
-    OsrmResponse generateTripBetweenTwoPoints(List<WayPoint> wayPoints)
+    OsrmResponse generateRoute(List<WayPoint> wayPoints)
         throws TooManyCoordinatesException, HttpTimeoutException;
 
     OsrmResponse generateTrip(List<WayPoint> wayPoints)

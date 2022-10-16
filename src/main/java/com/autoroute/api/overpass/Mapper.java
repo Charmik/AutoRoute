@@ -1,20 +1,101 @@
 package com.autoroute.api.overpass;
 
+import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.Vertex;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class Mapper {
 
-    public static Vertex[] mapToVertex(List<OverpassResponse> responses) {
-        Vertex[] arr = new Vertex[responses.size()];
-        for (int i = 0; i < responses.size(); i++) {
-            arr[i] = new Vertex(
-                i,
-                responses.get(i).id(),
-                responses.get(i).latLon());
+    private static final Logger LOGGER = LogManager.getLogger(Mapper.class);
+
+    private static Set<Long> getOrCreateSet(Map<Long, Set<Long>> m, long nodeId) {
+        var neighbours = m.get(nodeId);
+        if (neighbours == null) {
+            neighbours = new HashSet<>();
         }
-        return arr;
+        return neighbours;
     }
 
+    public static Graph mapToGraph(OverpassResponse r, int minDistance, int maxDistance) {
+
+        List<Vertex> vertices = getVertices(r);
+        LOGGER.info("Start build graph");
+        return new Graph(vertices, minDistance, maxDistance);
+    }
+
+    @NotNull
+    private static List<Vertex> getVertices(OverpassResponse r) {
+        final List<Node> nodes = r.getNodes();
+        final List<Way> ways = r.getWays();
+
+        Map<Long, Set<Long>> nodeIdToNeighbors = new HashMap<>();
+        for (int i = 0; i < ways.size(); i++) {
+            Way w = ways.get(i);
+            final long[] nodeIds = w.nodesIds();
+
+            for (int j = 0; j < nodeIds.length; j++) {
+                final long nodeId = nodeIds[j];
+                var neighbours = getOrCreateSet(nodeIdToNeighbors, nodeId);
+                if (j > 0) {
+                    assert nodeId != nodeIds[j - 1];
+                    neighbours.add(nodeIds[j - 1]);
+                }
+                if (j < nodeIds.length - 1) {
+                    assert nodeId != nodeIds[j + 1];
+                    neighbours.add(nodeIds[j + 1]);
+                }
+                nodeIdToNeighbors.put(nodeId, neighbours);
+            }
+        }
+        LOGGER.info("Processed all ways");
+
+
+        Map<Long, Node> idToNode = new HashMap<>();
+        for (Node node : nodes) {
+            idToNode.put(node.id(), node);
+        }
+
+        Map<Long, Vertex> idToVertex = new HashMap<>();
+        int index = 0;
+        for (Map.Entry<Long, Set<Long>> entry : nodeIdToNeighbors.entrySet()) {
+            final Long nodeId = entry.getKey();
+            Node nodeV = idToNode.get(nodeId);
+            final Set<Long> neighbours = entry.getValue();
+            Vertex v = idToVertex.get(nodeId);
+            if (v == null) {
+                v = new Vertex(index, nodeV.id(), nodeV.latLon());
+                index++;
+                idToVertex.put(nodeId, v);
+            }
+            for (Long neighbour : neighbours) {
+                Vertex u = idToVertex.get(neighbour);
+                if (u == null) {
+                    Node nodeU = idToNode.get(neighbour);
+                    u = new Vertex(index, nodeU.id(), nodeU.latLon());
+                    index++;
+                    idToVertex.put(neighbour, u);
+                }
+                assert v.getId() != u.getId();
+                v.addNeighbor(u);
+                u.addNeighbor(v);
+            }
+        }
+        LOGGER.info("Processed all nodes");
+
+        List<Vertex> l = new ArrayList<>(idToVertex.values());
+        for (Vertex v : l) {
+            assert v.getId() < l.size();
+            assert !v.getNeighbors().contains(v);
+        }
+        return l;
+    }
 }

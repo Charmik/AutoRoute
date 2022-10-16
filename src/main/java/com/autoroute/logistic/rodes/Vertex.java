@@ -1,27 +1,64 @@
 package com.autoroute.logistic.rodes;
 
 import com.autoroute.osm.LatLon;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Vertex {
+
+    private static final Logger LOGGER = LogManager.getLogger(Vertex.class);
 
     private int id; // 0..N
     private final long identificator;
     private final LatLon latLon;
-    private final Set<Vertex> neighbors; // TODO: can be an array of ints of ids, but should be updated properly
+    private final List<Vertex> neighbors; // TODO: can be an array of ints of ids, but should be updated properly
+    private double[] distances; // TODO: can be an array of ints of ids, but should be updated properly
+    private boolean superVertex = false;
 
     public Vertex(int id, long identificator, LatLon latLon) {
         this.id = id;
         this.identificator = identificator;
         this.latLon = latLon;
-        this.neighbors = new HashSet<>();
+        this.neighbors = new ArrayList<>();
+        this.distances = null;
+    }
+
+    public Vertex(Vertex old) {
+        this.id = old.id;
+        this.identificator = old.identificator;
+        this.latLon = old.latLon;
+        this.neighbors = old.neighbors;
+        this.superVertex = old.superVertex;
+    }
+
+    public void calculateDistance() {
+        this.distances = new double[neighbors.size()];
+        for (int i = 0; i < neighbors.size(); i++) {
+            var u = neighbors.get(i);
+            distances[i] = LatLon.distanceKM(getLatLon(), u.getLatLon());
+        }
+    }
+
+    public double getDistance(Vertex neighbor) {
+        for (int i = 0; i < neighbors.size(); i++) {
+            var v = neighbors.get(i);
+            if (v.getId() == neighbor.getId()) {
+                return distances[i];
+            }
+        }
+        throw new IllegalStateException();
     }
 
     public boolean addNeighbor(Vertex v) {
-        return neighbors.add(v);
+        if (!neighbors.contains(v)) {
+            neighbors.add(v);
+            return true;
+        }
+        return false;
+//        return neighbors.add(v);
     }
 
     public boolean removeNeighbor(Vertex v) {
@@ -40,7 +77,7 @@ public class Vertex {
         return latLon;
     }
 
-    public Set<Vertex> getNeighbors() {
+    public List<Vertex> getNeighbors() {
         return neighbors;
     }
 
@@ -48,16 +85,28 @@ public class Vertex {
         this.id = id;
     }
 
+    public boolean isSuperVertex() {
+        return superVertex;
+    }
+
+    // TODO: draw a graph of super vertexes
+    public void setSuperVertex() {
+        this.superVertex = true;
+    }
+
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
         Vertex vertex = (Vertex) o;
+        return id == vertex.getId();
 
-        if (id != vertex.id) return false;
-        if (identificator != vertex.identificator) return false;
-        return Objects.equals(latLon, vertex.latLon);
+//        if (this == o) return true;
+//        if (o == null || getClass() != o.getClass()) return false;
+//
+//
+//
+//        if (id != vertex.id) return false;
+//        if (identificator != vertex.identificator) return false;
+//        return Objects.equals(latLon, vertex.latLon);
     }
 
     @Override

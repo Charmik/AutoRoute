@@ -3,85 +3,169 @@ package com.autoroute.logistic.rodes;
 import com.autoroute.osm.LatLon;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 public class Graph {
 
     private static final Logger LOGGER = LogManager.getLogger(Graph.class);
 
     private List<Vertex> vertices;
+    private List<Vertex> superVertices = null;
+    private final int maxKM;
+    private final int minKM;
+    private final Random random = new Random(42);
+    private Graph fullGraph = null;
 
-    public Graph(List<Vertex> vertices) {
+    public Graph(List<Vertex> vertices, int minKM, int maxKM) {
+        assert !vertices.isEmpty();
         this.vertices = new ArrayList<>(vertices);
+        this.minKM = minKM;
+        this.maxKM = maxKM;
+        LOGGER.info("created graph with: {} vertices", vertices.size());
+        fastUpdateIds();
     }
 
-    /*
-    public void buildGraph() {
-        // TODO: is it possible to optimize?
-        for (int i = 0; i < vertices.size(); i++) {
-            for (int j = i + 1; j < vertices.size(); j++) {
-                var v1 = vertices.get(i);
-                var v2 = vertices.get(j);
-                if (v1.getLatLon().isClosePoint(v2.getLatLon())) {
-                    v1.addNeighbor(v2);
-                    v2.addNeighbor(v1);
-                }
+    public void checkGraph(long identificatorStartVertex) {
+        for (Vertex v : vertices) {
+            assert !v.getNeighbors().contains(v);
+            for (Vertex u : v.getNeighbors()) {
+                assert u.getId() < vertices.size();
+                assert v.getNeighbors().contains(u);
+                assert u.getNeighbors().contains(v);
+                assert !u.getNeighbors().contains(u);
+            }
+        }
+        assert vertices.stream().filter(e -> e.getIdentificator() == identificatorStartVertex).toList().size() == 1;
+    }
+
+    public void addEdgesFromStartPoint(Vertex startVertex, double minDistance) {
+        for (Vertex v : vertices) {
+            if (v.getIdentificator() == startVertex.getIdentificator()) {
+                continue;
+            }
+            final double d = LatLon.distanceKM(startVertex.getLatLon(), v.getLatLon());
+            if (d < minDistance) {
+                v.addNeighbor(startVertex);
+                startVertex.addNeighbor(v);
+                checkGraph(startVertex.getIdentificator());
             }
         }
     }
-    */
 
-    public Cycle dfs(Vertex v) {
+    public void removeNotVisitedVertexes(Vertex start) {
         boolean[] visit = new boolean[vertices.size()];
-        int[] steps = new int[vertices.size()];
-        Arrays.fill(steps, -1);
-        List<Vertex> currentWay = new ArrayList<>(1024);
-        currentWay.add(v);
-        var res = dfs(v, currentWay, 0, visit, steps);
-        return res;
+        bfsVisit(start, visit);
+        List<Vertex> newVertices = new ArrayList<>();
+        for (final Vertex v : vertices) {
+            if (!visit[v.getId()]) {
+                for (Vertex k : v.getNeighbors()) {
+                    k.removeNeighbor(v);
+                }
+            } else {
+                newVertices.add(v);
+            }
+        }
+        vertices = newVertices;
+        updateIds();
     }
 
-    private Cycle dfs(Vertex v, List<Vertex> currentWay, int depth, boolean[] visit, int[] steps) {
-        assert v.getId() == vertices.get(v.getId()).getId();
-        assert v.getNeighbors().size() == vertices.get(v.getId()).getNeighbors().size();
-        final int id = v.getId();
-        visit[id] = true;
-        steps[id] = depth;
+    private void bfsVisit(Vertex start, boolean[] visit) {
+        visit[start.getId()] = true;
+        ArrayList<Vertex> queue = new ArrayList<>(vertices.size()); // instead of Queue for perf
+        queue.add(start);
+        int pointer = 0;
 
-        var neighbors = new ArrayList<>(v.getNeighbors());
-        Collections.shuffle(neighbors);
-
-        for (Vertex u : neighbors) {
-//            System.out.println("d2: " + LatLon.distanceKM(v.getLatLon(), u.getLatLon()));
-            if (!visit[u.getId()]) {
-                currentWay.add(u);
-                var res = dfs(u, currentWay, depth + 1, visit, steps);
-                if (!res.route().isEmpty()) {
-                    return res;
+        while (pointer < queue.size()) {
+            final Vertex v = queue.get(pointer);
+            final List<Vertex> neighbors = v.getNeighbors();
+            for (int i = 0; i < neighbors.size(); i++) {
+                var u = neighbors.get(i);
+                if (!visit[u.getId()]) {
+                    visit[u.getId()] = true;
+                    queue.add(u);
                 }
-                currentWay.remove(currentWay.size() - 1);
-            } else {
-                final int uSteps = steps[u.getId()];
-                assert uSteps != -1;
-                if (depth > uSteps) {
-                    final int diffDepth = depth - uSteps;
-                    if (diffDepth > 30) {
-                        currentWay.add(u);
-                        return new Cycle(currentWay, u, v);
-                    }
+            }
+            pointer++;
+        }
+    }
+
+    private double distance(Vertex v, Vertex u) {
+        return LatLon.distanceKM(v.getLatLon(), u.getLatLon());
+    }
+
+    public void calculateDistanceForNeighbours() {
+        for (Vertex v : vertices) {
+            v.calculateDistance();
+        }
+    }
+
+    // TODO: move it out from Graph to some CycleAlgorithm which works with the graph.
+    public void findAllCycles(Vertex startVertex, List<Cycle> result, DijkstraAlgorithm dijkstra) {
+        Vertex[] prev = new Vertex[vertices.size()];
+        Arrays.fill(prev, null);
+        boolean[] visited = new boolean[vertices.size()];
+        Arrays.fill(visited, false);
+        visited[startVertex.getId()] = true;
+
+        LinkedList<Vertex> stack = new LinkedList<>();
+        stack.add(startVertex);
+
+        while (!stack.isEmpty()) { // dfs without recursion
+            final Vertex v = stack.removeFirst();
+            visited[v.getId()] = true;
+
+            final List<Vertex> neighbors = v.getNeighbors();
+            Collections.shuffle(neighbors);
+
+            for (int i = 0; i < neighbors.size(); i++) {
+                Vertex u = neighbors.get(i);
+                if (!visited[u.getId()]) {
+                    prev[u.getId()] = v;
+                    stack.addFirst(u);
+                } else if (prev[v.getId()].getId() != u.getId()) {
+                    tryAddNewCycle(startVertex, result, prev, v, u, dijkstra);
                 }
             }
         }
-        return Cycle.empty();
+    }
+
+    private void tryAddNewCycle(Vertex startVertex, List<Cycle> result,
+                                Vertex[] prev, Vertex v, Vertex u, DijkstraAlgorithm dijkstra) {
+
+        var cycle = getCycle(prev, v, u);
+        if (cycle == null) {
+            return;
+        }
+
+        if (cycle.tryAddCycle(this, fullGraph, startVertex, result, cycle, dijkstra, minKM, maxKM)) {
+
+        }
+    }
+
+    @Nullable
+    private static Cycle getCycle(Vertex[] prev, Vertex from, Vertex to) {
+        List<Vertex> cycle = new ArrayList<>();
+        cycle.add(to);
+        Vertex k = from;
+        while (k != null && k.getId() != to.getId()) {
+            cycle.add(k);
+            k = prev[k.getId()];
+        }
+        if (k == null) {
+            return null;
+        }
+        cycle.add(to);
+        return new Cycle(cycle);
     }
 
     public Vertex findNearestVertex(LatLon latLon) {
@@ -98,166 +182,137 @@ public class Graph {
         return minV;
     }
 
-    public void buildFast(double maxDistance) {
-        boolean[] addedNeighbor = new boolean[1];
-        iterateOverPotentialNeighbors(maxDistance,
-            () -> {
-                addedNeighbor[0] = false;
-            },
-            (i, v1, j, v2) -> {
-                final double d = LatLon.distanceKM(v1.getLatLon(), v2.getLatLon());
-//                System.out.println("d1: " + d);
-                assert d < maxDistance;
-                if (v1.addNeighbor(v2)) {
-                    addedNeighbor[0] = true;
-                }
-                if (v2.addNeighbor(v1)) {
-                    addedNeighbor[0] = true;
-                }
-            },
-            (i, j) -> {
-                return addedNeighbor[0];
-            });
-    }
-
-    public void eliminatesNodes(double maxDistance) {
-        boolean[][] remove = new boolean[1][vertices.size()];
-        int[] oldSize = new int[1];
-        iterateOverPotentialNeighbors(maxDistance,
-            () -> {
-                oldSize[0] = vertices.size();
-            },
-            (i, v1, j, v2) -> {
-                remove[0][i] = true;
-            },
-            (i, j) -> {
-                List<Vertex> l = new ArrayList<>();
-                for (int it = 0; it < vertices.size(); it++) {
-                    if (!remove[0][it]) {
-                        l.add(vertices.get(it));
-                    }
-                }
-                System.out.println("get: " + l.size() + " vertexes");
-                if (l.size() == oldSize[0]) {
-                    return false;
-                }
-                vertices = l;
-                remove[0] = new boolean[vertices.size()];
-                updateIds();
-                return true;
-            });
-    }
-
-    public void iterateOverPotentialNeighbors(
-        double maxDistance,
-        Runnable beforeIteration,
-        FourConsumer<Integer, Vertex, Integer, Vertex> func1,
-        BiFunction<Integer, Integer, Boolean> continueFunc) {
-        Set<Vertex> choosen = new HashSet<>();
-
-        int[] fail = new int[1];
-        for (int iteration = 0; iteration < 500; iteration++) {
-            beforeIteration.run();
-            Vertex randomVertex;
-            while (true) {
-                var randomIndex = ThreadLocalRandom.current().nextInt(vertices.size());
-                randomVertex = vertices.get(randomIndex);
-                if (!choosen.contains(randomVertex)) {
-                    choosen.add(randomVertex);
-                    break;
-                }
-            }
-            final LatLon latLon = randomVertex.getLatLon();
-            vertices.sort((o1, o2) -> {
-                double distance1;
-                double distance2;
-                if (fail[0] == 0) {
-                    distance1 = LatLon.fastDistance(o1.getLatLon(), latLon);
-                    distance2 = LatLon.fastDistance(o2.getLatLon(), latLon);
-                } else {
-                    distance1 = LatLon.distanceKM(o1.getLatLon(), latLon);
-                    distance2 = LatLon.distanceKM(o2.getLatLon(), latLon);
-                }
-                return Double.compare(distance1, distance2);
-            });
-            updateIds();
-
-            for (int m = 0; m < vertices.size(); m += 2) {
-                int i = m - 1;
-                int j = m + 1;
-                while (i >= 0
-                    && LatLon.distanceKM(vertices.get(i).getLatLon(), vertices.get(m).getLatLon()) < maxDistance) {
-                    func1.accept(i, vertices.get(i), m, vertices.get(m));
-                    i--;
-                }
-                while (j < vertices.size()
-                    && LatLon.distanceKM(vertices.get(j).getLatLon(), vertices.get(m).getLatLon()) < maxDistance) {
-                    if (j >= vertices.size()) {
-                        break;
-                    }
-                    func1.accept(j, vertices.get(j), m, vertices.get(m));
-                    j++;
-                }
-            }
-            if (!continueFunc.apply(0, 0)) {
-                fail[0]++;
-                if (fail[0] == 2) {
-                    LOGGER.info("using more accurate distance between points");
-                    break;
-                }
-            }
-        }
-
-        StringBuilder s = new StringBuilder("[out:json][timeout:120];\n");
-        s.append("(");
-        for (Vertex vertex : vertices) {
-            s.append("node(").append(vertex.getIdentificator()).append(");");
-        }
-        s.append(");\n");
-        s.append("out;");
-        System.out.println(s);
-    }
-
-    public void eliminatesNodesSlow(double maxDistance) {
-        for (int iter = 0; iter < 1000; iter++) {
-            int removed = 0;
-            boolean[] remove = new boolean[vertices.size()];
-            boolean[] visit = new boolean[vertices.size()];
-            for (int i = 0; i < vertices.size(); i++) {
-                for (int j = i + 1; j < vertices.size(); j++) {
-                    if (checkDistance(maxDistance, remove, visit, i, j)) {
-                        removed++;
-                    }
-                }
-            }
-            if (removed == 0) {
-                break;
-            }
-            final int newSize = vertices.size() - removed;
-            List<Vertex> newArr = new ArrayList<>(newSize);
-            for (int i = 0; i < vertices.size(); i++) {
-                if (!remove[i]) {
-                    newArr.add(vertices.get(i));
-                }
-            }
-            System.out.println("old size: " + vertices.size() + " new size: " + newArr.size());
-            vertices = newArr;
-            updateIds();
-        }
-    }
-
-    public void buildSlow(double maxDistance) {
+    public void removeEdges(long identificatorStartVertex) {
         for (int i = 0; i < vertices.size(); i++) {
-            for (int j = i + 1; j < vertices.size(); j++) {
-                var v1 = vertices.get(i);
-                var v2 = vertices.get(j);
-                final double d = LatLon.distanceKM(v1.getLatLon(), v2.getLatLon());
-                if (d < maxDistance) {
-                    v1.addNeighbor(v2);
-                    v2.addNeighbor(v1);
+            var v = vertices.get(i);
+            if (i % 5000 == 0) {
+                LOGGER.info("removeEdges: {}/{}", i, vertices.size());
+            }
+            List<Vertex> neighbors = new ArrayList<>(v.getNeighbors());
+            if (neighbors.size() < 3 || v.getIdentificator() == identificatorStartVertex) {
+                continue;
+            }
+            neighbors.sort((x, y) -> {
+                var d1 = LatLon.fastDistance(v.getLatLon(), x.getLatLon());
+                var d2 = LatLon.fastDistance(v.getLatLon(), y.getLatLon());
+                return Double.compare(d2, d1);
+            });
+
+            for (Vertex u : neighbors) {
+                if (u.getNeighbors().size() < 3 || u.getIdentificator() == identificatorStartVertex) {
+                    continue;
+                }
+                final int depthLimit = 5;
+                var distancesBeforeDelete = bfsDistance(v, depthLimit + 1);
+                assert distancesBeforeDelete.getDistance()[u.getId()] == 1;
+                assert distancesBeforeDelete.getParents()[u.getId()].equals(v);
+
+                v.removeNeighbor(u);
+                u.removeNeighbor(v);
+
+                var newDistancesFromV = bfsDistance(v, depthLimit);
+                var d = newDistancesFromV.getDistance()[u.getId()];
+
+                List<Vertex> path = new ArrayList<>();
+                Vertex k = u;
+                while (k != null && !k.equals(v)) {
+                    path.add(k);
+                    k = newDistancesFromV.parents[k.getId()];
+                }
+                path.add(v);
+                Collections.reverse(path);
+
+
+                if (d == -1 || d > depthLimit
+                ) {
+                    v.addNeighbor(u);
+                    u.addNeighbor(v);
                 }
             }
         }
+    }
+
+    public void setFullGraph(Graph fullGraph) {
+        assert this.fullGraph == null;
+        this.fullGraph = fullGraph;
+    }
+
+    static class BfsResult {
+        int[] distance;
+        Vertex[] parents;
+
+        public BfsResult(int[] distance, Vertex[] parents) {
+            this.distance = distance;
+            this.parents = parents;
+        }
+
+        public int[] getDistance() {
+            return distance;
+        }
+
+        public Vertex[] getParents() {
+            return parents;
+        }
+    }
+
+    private BfsResult bfsDistance(Vertex start, int depthLimit) {
+        int[] distance = new int[vertices.size()];
+        Vertex[] parents = new Vertex[vertices.size()];
+        Arrays.fill(distance, -1);
+        distance[start.getId()] = 0;
+        int pointer = 0;
+        ArrayList<Vertex> queue = new ArrayList<>(vertices.size()); // instead of Queue for perf
+        queue.add(start);
+        while (pointer < queue.size()) {
+            final Vertex v = queue.get(pointer);
+            final List<Vertex> neighbors = v.getNeighbors();
+            for (int i = 0; i < neighbors.size(); i++) {
+                var u = neighbors.get(i);
+                if (distance[u.getId()] == -1) {
+                    final int newDistance = distance[v.getId()] + 1;
+                    if (newDistance >= depthLimit) {
+                        return new BfsResult(distance, parents);
+                    }
+                    distance[u.getId()] = newDistance;
+                    parents[u.getId()] = v;
+                    queue.add(u);
+                }
+            }
+            pointer++;
+        }
+        return new BfsResult(distance, parents);
+    }
+
+
+    public void removeSingleEdgeVertexes(long identificatorStartVertex) {
+        boolean[] deleted = new boolean[vertices.size()];
+        boolean progress;
+//        do {
+        progress = false;
+        for (Vertex v : vertices) {
+            if (v.getIdentificator() == identificatorStartVertex) {
+                continue;
+            }
+            if (v.getNeighbors().isEmpty()) {
+                deleted[v.getId()] = true;
+                progress = true;
+            } else if (v.getNeighbors().size() == 1) {
+                v.getNeighbors().iterator().next().removeNeighbor(v);
+                deleted[v.getId()] = true;
+                progress = true;
+            }
+        }
+        List<Vertex> newVertices = new ArrayList<>(vertices.size() / 2);
+        for (int i = 0; i < vertices.size(); i++) {
+            Vertex v = vertices.get(i);
+            if (!deleted[v.getId()]) {
+                newVertices.add(v);
+            }
+        }
+        vertices = newVertices;
+        updateIds();
+        LOGGER.info("made iteration in removeSingleEdgeVertexes");
+//        } while (progress);
     }
 
     private boolean checkDistance(double distance, boolean[] remove, boolean[] visit, int i, int j) {
@@ -277,200 +332,142 @@ public class Graph {
         return false;
     }
 
+    public void calculateSuperVertices() {
+        superVertices = vertices.stream()
+            .filter(Vertex::isSuperVertex)
+            .toList();
+    }
+
     public List<Vertex> getVertices() {
         return vertices;
     }
 
-    public void mergeNeighbours(int minNeighboursCount, double maxDistance) {
-        boolean progress = true;
-        for (int iter = 0; iter < 10000 && progress; iter++) {
-            progress = false;
-
-            for (int i = 0; i < vertices.size(); i++) {
-                var v = vertices.get(i);
-                final Set<Vertex> neighbors = new HashSet<>(v.getNeighbors());
-                final Set<Vertex> removeVertexes = new HashSet<>();
-
-                if (neighbors.size() >= minNeighboursCount) {
-                    for (Vertex u : neighbors) {
-                        final double d = LatLon.distanceKM(v.getLatLon(), u.getLatLon());
-                        if (d < maxDistance * neighbors.size()) {
-                            removeVertexes.add(u);
-                            v.removeNeighbor(u);
-                            progress = true;
-                        }
-                    }
-                    if (progress) {
-                        for (Vertex removeVertex : removeVertexes) {
-                            final Set<Vertex> removeVertexNeighbors = new HashSet<>(removeVertex.getNeighbors());
-                            updateEdges(removeVertexNeighbors, v, maxDistance);
-                            for (Vertex neighbor : removeVertexNeighbors) {
-                                neighbor.removeNeighbor(removeVertex);
-                            }
-                            vertices.remove(removeVertex);
-                        }
-                        break; // can be removed for perf
-                    }
-
-                }
-            }
-        }
-        updateIds();
+    public List<Vertex> getSuperVertices() {
+        assert superVertices != null;
+        return superVertices;
     }
 
-    private void updateIds() {
+    public int size() {
+        return vertices.size();
+    }
+
+    private void fastUpdateIds() {
         for (int i = 0; i < vertices.size(); i++) {
             vertices.get(i).setId(i);
         }
     }
 
-    private void updateEdges(Set<Vertex> neighbors, Vertex u, double maxDistance) {
-        final List<Vertex> oldNeighbors = new ArrayList<>(neighbors);
-        for (int i = 0; i < oldNeighbors.size(); i++) {
-            var v = oldNeighbors.get(i);
-            final double d = LatLon.distanceKM(v.getLatLon(), u.getLatLon());
-            if (!v.equals(u)) {
-                if (v.getNeighbors().size() < 5 || u.getNeighbors().size() < 5) {
-                    v.addNeighbor(u);
-                    u.addNeighbor(v);
-                }
-                if (d < maxDistance * oldNeighbors.size() && !v.equals(u)) {
-                    v.addNeighbor(u);
-                    u.addNeighbor(v);
+    private void updateIds() {
+        for (int i = 0; i < vertices.size(); i++) {
+            final Vertex v = vertices.get(i);
+            Vertex newV = new Vertex(v);
+            newV.setId(i);
+            for (Vertex neighbor : v.getNeighbors()) {
+                assert neighbor.getId() != v.getId();
+                if (neighbor.removeNeighbor(v)) {
+                    assert neighbor.getId() != newV.getId();
+                    neighbor.addNeighbor(newV);
                 }
             }
+            v.setId(i);
+            vertices.set(i, newV);
         }
     }
 
-    public void removeNearVertexes(List<Vertex> cycleVertexes) {
-        for (Vertex v : cycleVertexes) {
-            boolean[] removed = new boolean[vertices.size()];
-            for (int i = 0; i < vertices.size(); i++) {
-                Vertex u = vertices.get(i);
-                if (v.getLatLon().isCloseInCity(u.getLatLon())) {
-                    removed[i] = true;
-                    for (Vertex neighbor : u.getNeighbors()) {
+    public void removeCloseVertexes(double distance, long identificatorStartVertex) {
+        int tries = 0;
+        while (true) {
+            Vertex bestVertex = null;
+            int countMaxNeighbours = 0;
+
+            Vertex randomVertex = vertices.get(random.nextInt(vertices.size()));
+            final LatLon randomLatLon = randomVertex.getLatLon();
+            List<Vertex> sortVertices = new ArrayList<>(vertices);
+            sortVertices.sort((o1, o2) -> {
+                double distance1 = LatLon.fastDistance(o1.getLatLon(), randomLatLon);
+                double distance2 = LatLon.fastDistance(o2.getLatLon(), randomLatLon);
+                return Double.compare(distance1, distance2);
+            });
+
+            for (int m = 0; m < sortVertices.size(); m++) {
+                int count = 0;
+                int i = m - 1;
+                int j = m + 1;
+                final Vertex midV = sortVertices.get(m);
+                while (i >= 0
+                    && distance(sortVertices.get(i), midV) < distance) {
+                    count++;
+                    i--;
+                }
+                while (j < sortVertices.size()
+                    && distance(sortVertices.get(j), midV) < distance) {
+                    count++;
+                    j++;
+                }
+                if (count > countMaxNeighbours) {
+                    countMaxNeighbours = count;
+                    bestVertex = midV;
+                }
+            }
+            if (bestVertex == null || countMaxNeighbours < 300) {
+                if (tries == 50) {
+                    break;
+                } else {
+                    tries++;
+                    continue;
+                }
+            }
+            tries = 0;
+            // LOGGER.info("delete neighbours: {} now have: {}", countMaxNeighbours, vertices.size());
+            final Vertex v = bestVertex;
+            v.setSuperVertex();
+            Set<Vertex> closeVertexes = new HashSet<>();
+            for (int j = 0; j < vertices.size(); j++) {
+                Vertex u = vertices.get(j);
+                if (v.getId() == u.getId()) continue;
+                if (u.getIdentificator() == identificatorStartVertex) continue;
+                if (distance(v, u) < distance) {
+                    closeVertexes.add(u);
+                }
+            }
+//            assert closeVertexes.size() == countMaxNeighbours; // doesn't work with sort algorithm
+            for (Vertex u : closeVertexes) {
+                for (Vertex neighbor : u.getNeighbors()) {
+                    if (v.getId() == neighbor.getId()) {
+                        continue;
+                    }
+                    final double d = distance(v, neighbor);
+                    if (d < distance * 2) {
                         neighbor.removeNeighbor(u);
+                        neighbor.addNeighbor(v);
+                        v.addNeighbor(neighbor);
                     }
                 }
             }
-            List<Vertex> newVertices = new ArrayList<>();
-            for (int i = 0; i < vertices.size(); i++) {
-                Vertex u = vertices.get(i);
-                if (!removed[i]) {
-                    newVertices.add(u);
+            deleteVerticesFromGraph(closeVertexes);
+        }
+    }
+
+    public void removeLongAwayVertices(Vertex startVertex, int kmDistance) {
+        var deleteVertices = vertices.stream()
+            .filter(v -> LatLon.distanceKM(v.getLatLon(), startVertex.getLatLon()) > kmDistance)
+            .collect(Collectors.toUnmodifiableSet());
+        assert !deleteVertices.contains(startVertex);
+        deleteVerticesFromGraph(deleteVertices);
+    }
+
+    private void deleteVerticesFromGraph(Set<Vertex> deleteVertices) {
+        for (Vertex v : vertices) {
+            List<Vertex> deleteForV = new ArrayList<>();
+            for (Vertex u : v.getNeighbors()) {
+                if (deleteVertices.contains(u)) {
+                    deleteForV.add(u);
                 }
             }
-            vertices = newVertices;
+            v.getNeighbors().removeAll(deleteForV);
         }
+        vertices.removeAll(deleteVertices);
         updateIds();
     }
 
-    @FunctionalInterface
-    public interface FourConsumer<T, U, V, X> {
-
-        /**
-         * Performs this operation on the given arguments.
-         *
-         * @param t the first input argument
-         * @param u the second input argument
-         */
-        void accept(T t, U u, V v, X x);
-
-        /**
-         * Returns a composed {@code BiConsumer} that performs, in sequence, this
-         * operation followed by the {@code after} operation. If performing either
-         * operation throws an exception, it is relayed to the caller of the
-         * composed operation.  If performing this operation throws an exception,
-         * the {@code after} operation will not be performed.
-         *
-         * @param after the operation to perform after this operation
-         * @return a composed {@code BiConsumer} that performs in sequence this
-         * operation followed by the {@code after} operation
-         * @throws NullPointerException if {@code after} is null
-         */
-        default FourConsumer<T, U, V, X> andThen(FourConsumer<? super T, ? super U, ? super V, ? super X> after) {
-            Objects.requireNonNull(after);
-
-            return (l, r, s, x) -> {
-                accept(l, r, s, x);
-                after.accept(l, r, s, x);
-            };
-        }
-    }
-
-    /*
-        public void eliminatesNodes(double maxDistance) {
-            Set<Vertex> choosen = new HashSet<>();
-            int[] fail = new int[1];
-            for (int iteration = 0; iteration < 500; iteration++) {
-                var oldSize = vertices.size();
-                Vertex randomVertex;
-                while (true) {
-                    var randomIndex = ThreadLocalRandom.current().nextInt(vertices.size());
-                    randomVertex = vertices[randomIndex];
-                    if (!choosen.contains(randomVertex)) {
-                        choosen.add(randomVertex);
-                        break;
-                    }
-                }
-                final LatLon latLon = randomVertex.getLatLon();
-                Arrays.sort(vertices, (o1, o2) -> {
-                    double distance1;
-                    double distance2;
-                    if (fail[0] == 0) {
-                        distance1 = LatLon.fastDistance(o1.getLatLon(), latLon);
-                        distance2 = LatLon.fastDistance(o2.getLatLon(), latLon);
-                    } else {
-                        distance1 = LatLon.distanceKM(o1.getLatLon(), latLon);
-                        distance2 = LatLon.distanceKM(o2.getLatLon(), latLon);
-                    }
-                    return Double.compare(distance1, distance2);
-                });
-
-                boolean[] remove = new boolean[vertices.size()];
-                for (int m = 0; m < vertices.size(); m += 2) {
-                    int i = m - 1;
-                    int j = m + 1;
-                    while (i >= 0
-                        && LatLon.distanceKM(vertices.get(i).getLatLon(), vertices.get(m).getLatLon()) < maxDistance) {
-                        remove[i] = true;
-                        i--;
-                    }
-                    while (j < vertices.size()
-                        && LatLon.distanceKM(vertices.get(j).getLatLon(), vertices.get(m).getLatLon()) < maxDistance) {
-                        if (j >= vertices.size()) {
-                            break;
-                        }
-                        remove[j] = true;
-                        j++;
-                    }
-                }
-                List<Vertex> l = new ArrayList<>();
-                for (int i = 0; i < vertices.size(); i++) {
-                    if (!remove[i]) {
-                        l.add(vertices.get(i));
-                    }
-                }
-                System.out.println("get: " + l.size() + " vertexes");
-                if (l.size() == oldSize) {
-                    fail[0]++;
-                    if (fail[0] == 2) {
-                        break;
-                    }
-                    LOGGER.info("using more accurate distance between points");
-                }
-                vertices = l.toArray(new Vertex[0]);
-            }
-
-            StringBuilder s = new StringBuilder("[out:json][timeout:120];\n");
-            s.append("(");
-            for (Vertex vertex : vertices) {
-                s.append("node(").append(vertex.getIdentificator()).append(");");
-            }
-            s.append(");\n");
-            s.append("out;");
-            System.out.println(s);
-        }
-    */
 }

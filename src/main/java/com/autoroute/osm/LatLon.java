@@ -17,6 +17,11 @@ public record LatLon(double lat, double lon) implements Serializable, Comparable
         return distance < 5;
     }
 
+    public boolean isCloseInCity(LatLon other, double kmDistance) {
+        double distance = distanceKM(this, other);
+        return distance < kmDistance;
+    }
+
     public static double fastDistance(LatLon l1, LatLon l2) {
         final double lonDiff = l1.lon - l2.lon;
         final double latDiff = l1.lat - l2.lat;
@@ -24,21 +29,21 @@ public record LatLon(double lat, double lon) implements Serializable, Comparable
     }
 
     public static double distanceKM(LatLon l1, LatLon l2) {
-        double theta = l1.lon - l2.lon;
-        double dist = Math.sin(deg2rad(l1.lat)) * Math.sin(deg2rad(l2.lat)) + Math.cos(deg2rad(l1.lat)) * Math.cos(deg2rad(l2.lat)) * Math.cos(deg2rad(theta));
-        dist = Math.acos(dist);
-        dist = rad2deg(dist);
-        dist = dist * 60 * 1.1515;
-        dist = dist * 1.609344;
-        return dist;
+        var lat1 = l1.lat;
+        var lat2 = l2.lat;
+
+        int R = 6371;
+        double x =
+            (Math.toRadians(l2.lon) - Math.toRadians(l1.lon)) * Math.cos(0.5 * (Math.toRadians(lat2) + Math.toRadians(lat1)));
+        double y = Math.toRadians(lat2) - Math.toRadians(lat1);
+        return R * Math.sqrt(x * x + y * y);
     }
 
-    private static double deg2rad(double deg) {
-        return (deg * Math.PI / 180.0);
-    }
-
-    private static double rad2deg(double rad) {
-        return (rad * 180.0 / Math.PI);
+    public static double angle(LatLon l1, LatLon l2, LatLon l3) {
+        double angle1 = Math.atan2(l2.lon - l1.lon, l2.lat - l1.lat);
+        double angle2 = Math.atan2(l3.lon - l2.lon, l3.lat - l2.lat);
+        double result = angle1 - angle2;
+        return result;
     }
 
     public static LatLon castFromWayPoint(io.jenetics.jpx.WayPoint point) {
