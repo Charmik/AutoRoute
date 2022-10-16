@@ -105,22 +105,14 @@ public class RouteDistanceAlgorithm {
         Graph compactGraph = GraphBuilder.buildGraph(response, start,
             startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
         compactGraph.setFullGraph(fullGraph);
-        final List<Cycle> cycles = new ArrayList<>();
-        // AtomicBoolean stoppedFindingCycles = new AtomicBoolean(false);
-        // TODO: try add waypoints inside in parallel. and build routes. return result as a parameter...:(
-        // osrmRouteFromCycles(minDistance, maxDistance, start, cycles, stoppedFindingCycles);
-        var startVertexCompactGraph = compactGraph.findNearestVertex(start);
 
+        var startVertexCompactGraph = compactGraph.findNearestVertex(start);
 
         assert startVertexFullGraph.getIdentificator() == startVertexCompactGraph.getIdentificator();
         compactGraph.calculateSuperVertices();
-        generateCyclesFromGraph(cycles, minDistance, maxDistance, startVertexCompactGraph, compactGraph, dijkstra);
+        var cycles =
+            generateCyclesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
 
-
-//        stoppedFindingCycles.set(true);
-//        while (stoppedFindingCycles.get()) {
-//            Utils.sleep(5000);
-//        }
 
         for (Cycle cycle : cycles) {
 
@@ -129,30 +121,19 @@ public class RouteDistanceAlgorithm {
         return null;
     }
 
-    private static void generateCyclesFromGraph(List<Cycle> cycles,
-                                                int minDistance,
-                                                int maxDistance,
-                                                Vertex startVertex,
-                                                Graph g,
-                                                DijkstraAlgorithm dijkstra) {
+    private static List<Cycle> generateCyclesFromGraph(Graph g,
+                                                       Vertex startVertex,
+                                                       DijkstraAlgorithm dijkstra) {
         LOGGER.info("Final graph has: {} vertices", g.getVertices().size());
 
         int tries = 0;
+        final List<Cycle> cycles = new ArrayList<>();
         g.calculateDistanceForNeighbours();
         int newSize;
         do {
             int oldSize = cycles.size();
             g.findAllCycles(startVertex, cycles, dijkstra);
-            // TODO: remove it!? check in cycle finding...
-//                var it = cycles.iterator();
-//                while (it.hasNext()) {
-//                    final Cycle c = it.next();
-//                    final double d = distanceToCycle(startVertex, c) + distanceOfCycle(c);
-//                    if (d > maxDistance) {
-//                        it.remove();
-////                        System.exit(43);
-//                    }
-//                }
+
             newSize = cycles.size();
             if (cycles.size() > oldSize) {
                 for (int i = oldSize; i < cycles.size(); i++) {
@@ -186,13 +167,9 @@ public class RouteDistanceAlgorithm {
                         fullRoute.add(cycle.vertices().get(j));
                         j = (j + 1) % cycle.vertices().size();
                     }
-                    // TODO: routeToCycle += original routeToCycle reversed
-//                        Utils.writeGPX(routeToCycle, "orig3_", i);
-
                     Collections.reverse(routeToCycle);
                     fullRoute.addAll(routeToCycle);
                     Utils.writeGPX(fullRoute, "route_", i);
-
                 }
                 tries = 0;
             }
@@ -203,34 +180,7 @@ public class RouteDistanceAlgorithm {
         } while (tries != 300 && newSize < 500);
 
         LOGGER.info("findAllCycles finished, found: {} cycles", cycles.size());
-    }
-
-    private static double distanceToCycle(Vertex startVertex, Cycle cycle) {
-        assert !cycle.vertices().isEmpty();
-        double minDistance = Double.MAX_VALUE;
-        Vertex best = cycle.vertices().get(0);
-        for (Vertex v : cycle.vertices()) {
-            final double d = LatLon.distanceKM(startVertex.getLatLon(), v.getLatLon());
-            if (d < minDistance) {
-                minDistance = d;
-                best = v;
-            }
-        }
-        return minDistance;
-    }
-
-    private static double distanceOfCycle(Cycle cycle) {
-        final List<Vertex> vertices = cycle.vertices();
-        if (vertices.size() < 2) {
-            LOGGER.warn("have cycle size size: {}, cycle: {}", vertices.size(), cycle);
-            throw new IllegalArgumentException();
-        }
-        double d = LatLon.distanceKM(vertices.get(0).getLatLon(), vertices.get(1).getLatLon());
-        for (int i = 1; i < vertices.size(); i++) {
-            d += LatLon.distanceKM(vertices.get(i - 1).getLatLon(), vertices.get(i).getLatLon());
-        }
-        d += LatLon.distanceKM(vertices.get(vertices.size() - 1).getLatLon(), vertices.get(0).getLatLon());
-        return d;
+        return cycles;
     }
 
     // TODO: can be done in parallel
