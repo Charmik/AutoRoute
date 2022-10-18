@@ -10,7 +10,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Collections;
 
@@ -36,13 +35,6 @@ public class GraphBuilder {
                                    int minDistanceKM,
                                    int maxDistanceKM) {
         LOGGER.info("Start building graph");
-        try {
-            Files.walk(Paths.get("o"), 1)
-                .filter(e -> e.toString().endsWith(".gpx"))
-                .forEach(e -> e.toFile().delete());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
         LOGGER.info("Start mapToVertex");
         Graph g = Mapper.mapToGraph(response, minDistanceKM, maxDistanceKM);
         LOGGER.info("Finish mapToVertex");
@@ -61,7 +53,7 @@ public class GraphBuilder {
         final GPX gpx = GpxGenerator.generateRouteWithWaypoints(Collections.emptyList(), superVertexes);
         try {
             GPX.write(gpx,
-                Paths.get("o/!superVertexes.gpx"));
+                Paths.get("o/SuperVertexes/superVertexes.gpx"));
         } catch (IOException e) {
         }
 

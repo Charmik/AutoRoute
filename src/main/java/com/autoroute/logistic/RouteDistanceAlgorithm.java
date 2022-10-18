@@ -117,6 +117,7 @@ public class RouteDistanceAlgorithm {
         return null;
     }
 
+    // TODO: make parallel, 1 dfs for every thread. duplicates in merge-thread once again?
     private static List<List<Vertex>> generateRoutesFromGraph(Graph g,
                                                               Vertex startVertex,
                                                               DijkstraAlgorithm dijkstra) {

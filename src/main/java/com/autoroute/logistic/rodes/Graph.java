@@ -1,12 +1,14 @@
 package com.autoroute.logistic.rodes;
 
 import com.autoroute.osm.LatLon;
+import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -117,7 +119,7 @@ public class Graph {
         Arrays.fill(visited, false);
         visited[startVertex.getId()] = true;
 
-        LinkedList<Vertex> stack = new LinkedList<>();
+        LinkedList<Vertex> stack = new LinkedList<>(); // TODO: replace to ArrayList for perf
         stack.add(startVertex);
 
         while (!stack.isEmpty()) { // dfs without recursion
@@ -382,6 +384,7 @@ public class Graph {
         }
     }
 
+    // TODO: make parallel
     public void removeCloseVertexes(double distance, long identificatorStartVertex) {
         int tries = 0;
         while (true) {
@@ -412,13 +415,13 @@ public class Graph {
                     count++;
                     j++;
                 }
-                if (count > countMaxNeighbours) {
+                if (count > countMaxNeighbours && midV.getIdentificator() != identificatorStartVertex) {
                     countMaxNeighbours = count;
                     bestVertex = midV;
                 }
             }
             if (bestVertex == null || countMaxNeighbours < 75) {
-//            if (bestVertex == null || countMaxNeighbours < 500) {
+                // TODO: make less? log, maybe 5 is enough?
                 if (tries == 50) {
                     break;
                 } else {
@@ -426,15 +429,17 @@ public class Graph {
                     continue;
                 }
             }
+            assert bestVertex.getIdentificator() != identificatorStartVertex;
             tries = 0;
             // LOGGER.info("delete neighbours: {} now have: {}", countMaxNeighbours, vertices.size());
             final Vertex v = bestVertex;
             v.setSuperVertex();
-            Set<Vertex> closeVertexes = new HashSet<>();
+            List<Vertex> closeVertexes = new ArrayList<>();
             for (int j = 0; j < vertices.size(); j++) {
                 Vertex u = vertices.get(j);
-                if (v.getId() == u.getId()) continue;
-                if (u.getIdentificator() == identificatorStartVertex) continue;
+                if (v.getId() == u.getId() || u.getIdentificator() == identificatorStartVertex) {
+                    continue;
+                }
                 if (distance(v, u) < distance) {
                     closeVertexes.add(u);
                 }
@@ -446,7 +451,7 @@ public class Graph {
                         continue;
                     }
                     final double d = distance(v, neighbor);
-                    if (d < distance * 2) {
+                    if (d < distance * 3) { // sometimes with * 2 we lose edge around bor, why?
                         neighbor.removeNeighbor(u);
                         neighbor.addNeighbor(v);
                         v.addNeighbor(neighbor);
@@ -465,7 +470,7 @@ public class Graph {
         deleteVerticesFromGraph(deleteVertices);
     }
 
-    private void deleteVerticesFromGraph(Set<Vertex> deleteVertices) {
+    private void deleteVerticesFromGraph(Collection<Vertex> deleteVertices) {
         for (Vertex v : vertices) {
             List<Vertex> deleteForV = new ArrayList<>();
             for (Vertex u : v.getNeighbors()) {

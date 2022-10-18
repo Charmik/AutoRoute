@@ -21,14 +21,12 @@ public class GraphMain {
         final int MIN_KM = 40;
         final int MAX_KM = 80;
 
-        final LatLon start = new LatLon(59.908977, 29.068520); // bor
-//        final LatLon start = new LatLon(34.690139, 32.987961); // cyprus
-//        final LatLon start = new LatLon(34.753686, 32.962196); // cyprus NOT CITY
+//        final LatLon start = new LatLon(59.908977, 29.068520); // bor
+        final LatLon start = new LatLon(34.700891, 33.098449); // cyprus
 
         Files.walk(Paths.get("o"), 10)
             .filter(e -> e.toString().endsWith(".gpx"))
             .forEach(e -> e.toFile().delete());
-
 
         final RouteDistanceAlgorithm alg = new RouteDistanceAlgorithm("charm");
         final OsrmResponse r = alg.buildRoute(start, MIN_KM, MAX_KM, Collections.emptyList(), new PointVisiter(), 1);

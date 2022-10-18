@@ -25,11 +25,6 @@ public record Cycle(List<Vertex> vertices) {
         double routeDistance = distanceToCycle * 2 + cycleDistance;
         final int superVertexes = countSuperVertexes();
 
-        if (cycleDistance > 40 && cycleDistance < 50 && distanceToCycle < 3) {
-            Utils.writeGPX(vertices, "ZZZ", result.size());
-            LOGGER.info("was found cycle: {}", result.size());
-        }
-
         if (1 == 1
             && (routeDistance > minKM && routeDistance < maxKM)
             && (cycleDistance > minKM / 2)
@@ -108,14 +103,11 @@ public record Cycle(List<Vertex> vertices) {
                 vertices.add(0, newU);
             }
 
-            int diff = 100;
+            int diff = 5;
             for (int i = 1; i < size() - 1; i++) {
                 var superVertex = vertices.get(i);
                 if (superVertex.isSuperVertex()) {
                     int startIndex = i - 1;
-//                    if (i > diff) {
-//                        startIndex -= diff;
-//                    }
                     int finishIndex = i + 1;
                     while (!vertices.get(finishIndex).isSuperVertex() && finishIndex < vertices.size() - 1 && finishIndex < i + 1 + diff) {
                         finishIndex++;

@@ -102,25 +102,17 @@ public class Vertex {
 
     @Override
     public boolean equals(Object o) {
-        Vertex vertex = (Vertex) o;
-        return id == vertex.getId();
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
 
-//        if (this == o) return true;
-//        if (o == null || getClass() != o.getClass()) return false;
-//
-//
-//
-//        if (id != vertex.id) return false;
-//        if (identificator != vertex.identificator) return false;
-//        return Objects.equals(latLon, vertex.latLon);
+        Vertex vertex = (Vertex) o;
+
+        return id == vertex.id;
     }
 
     @Override
     public int hashCode() {
-        int result = id;
-        result = 31 * result + (int) (identificator ^ (identificator >>> 32));
-        result = 31 * result + (latLon != null ? latLon.hashCode() : 0);
-        return result;
+        return id;
     }
 
     @Override
