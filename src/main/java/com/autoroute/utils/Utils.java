@@ -46,22 +46,19 @@ public class Utils {
     }
 
     public static void writeGPX(List<Vertex> vertices, int index) {
-
-        try {
-            GPX.write(GpxGenerator.generateRoute(vertices),
-                Paths.get("o/" + index + ".gpx"));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        writeGPX(GpxGenerator.generateRoute(vertices), "o/" + index + ".gpx");
     }
 
     public static void writeGPX(List<Vertex> vertices, String prefix, int index) {
         final GPX cycleGPX = GpxGenerator.generateRoute(vertices);
+        final String dirPath = "o/" + prefix;
+        new File(dirPath).mkdirs();
+        writeGPX(cycleGPX, dirPath + index + ".gpx");
+    }
+
+    public static void writeGPX(GPX gpx, String name) {
         try {
-            final String dirPath = "o/" + prefix;
-            new File(dirPath).mkdirs();
-            GPX.write(cycleGPX,
-                Paths.get(dirPath + index + ".gpx"));
+            GPX.write(gpx, Paths.get(name));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
