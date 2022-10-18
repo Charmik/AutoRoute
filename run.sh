@@ -1,5 +1,7 @@
 set -ex
 
+mvn install
+
 mvn compile assembly:single
 java \
 -ea -Xmx500m -XX:+UseSerialGC -Xlog:gc*:file=logs/gc.log \
