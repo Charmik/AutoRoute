@@ -18,10 +18,10 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.io.File;
 import java.net.http.HttpTimeoutException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,26 +110,23 @@ public class RouteDistanceAlgorithm {
 
         assert startVertexFullGraph.getIdentificator() == startVertexCompactGraph.getIdentificator();
         compactGraph.calculateSuperVertices();
-        var cycles =
-            generateCyclesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
+        var routes =
+            generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
 
-
-        for (Cycle cycle : cycles) {
-
-        }
 
         return null;
     }
 
-    private static List<Cycle> generateCyclesFromGraph(Graph g,
-                                                       Vertex startVertex,
-                                                       DijkstraAlgorithm dijkstra) {
+    private static List<List<Vertex>> generateRoutesFromGraph(Graph g,
+                                                              Vertex startVertex,
+                                                              DijkstraAlgorithm dijkstra) {
         LOGGER.info("Final graph has: {} vertices", g.getVertices().size());
 
         int tries = 0;
         final List<Cycle> cycles = new ArrayList<>();
         g.calculateDistanceForNeighbours();
         int newSize;
+        List<List<Vertex>> routes = new ArrayList<>();
         do {
             int oldSize = cycles.size();
             g.findAllCycles(startVertex, cycles, dijkstra);
@@ -138,8 +135,6 @@ public class RouteDistanceAlgorithm {
             if (cycles.size() > oldSize) {
                 for (int i = oldSize; i < cycles.size(); i++) {
                     var cycle = cycles.get(i);
-                    new File("o/cycles").mkdirs();
-                    Utils.writeGPX(cycle.vertices(), "cycles/cycle", i);
                     LOGGER.info("wrote a cycle: {} with: {} vertexes", i, cycle.size());
 
                     dijkstra.assertStartVertex(startVertex);
@@ -169,7 +164,8 @@ public class RouteDistanceAlgorithm {
                     }
                     Collections.reverse(routeToCycle);
                     fullRoute.addAll(routeToCycle);
-                    Utils.writeGPX(fullRoute, "route_", i);
+                    routes.add(fullRoute);
+                    Utils.writeGPX(fullRoute, i);
                 }
                 tries = 0;
             }
@@ -177,10 +173,16 @@ public class RouteDistanceAlgorithm {
             if (tries % 10 == 0) {
                 LOGGER.info("build cycles tries: {}", tries);
             }
-        } while (tries != 300 && newSize < 500);
+        } while (tries != 500 && newSize < 500);
+
+        routes.sort(Comparator.comparingDouble(Cycle::getCycleDistanceSlow));
+        for (int i = 0; i < cycles.size(); i++) {
+            var cycle = cycles.get(i);
+            Utils.writeGPX(cycle.vertices(), "sort/", i);
+        }
 
         LOGGER.info("findAllCycles finished, found: {} cycles", cycles.size());
-        return cycles;
+        return routes;
     }
 
     // TODO: can be done in parallel

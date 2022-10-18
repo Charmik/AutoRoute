@@ -13,13 +13,14 @@ import java.util.TreeSet;
 public class DijkstraAlgorithm {
 
     private final Graph g;
-    Long2DoubleOpenHashMap distances = new Long2DoubleOpenHashMap();
+    private final Long2DoubleOpenHashMap distances;
     private Vertex[] prev = null;
     private final Vertex startVertex;
 
     public DijkstraAlgorithm(Graph g, Vertex startVertex) {
         this.g = g;
         this.startVertex = startVertex;
+        this.distances = new Long2DoubleOpenHashMap(g.size());
     }
 
     public void run() {
@@ -43,30 +44,36 @@ public class DijkstraAlgorithm {
         }
 
         while (!queue.isEmpty()) {
-            final DijNode node = queue.pollFirst();
-            Vertex v = vertices.get(node.getId());
-
-            for (Vertex u : v.getNeighbors()) {
-                assert u.getNeighbors().contains(v);
-                final DijNode uNode = new DijNode(u.getId(), distances.get(u.getIdentificator()));
-                if (!queue.contains(uNode)) {
-                    continue;
-                }
-                double d = distances.get(v.getIdentificator()) + v.getDistance(u);
-                if (d < distances.get(u.getIdentificator())) {
-                    queue.remove(uNode);
-                    distances.put(u.getIdentificator(), d);
-                    prev[u.getId()] = v;
-                    queue.add(new DijNode(u.getId(), d));
-//                    if (finish != null && u.getIdentificator() == finish.getIdentificator()) {
-//                        queue.clear();
-//                        break;
-//                    }
-                }
+            dijkstraIteration(finish, queue);
+        }
+        if (finish == null) {
+            for (Long2DoubleMap.Entry entry : distances.long2DoubleEntrySet()) {
+                assert entry.getDoubleValue() != Double.MAX_VALUE;
             }
         }
-        for (Long2DoubleMap.Entry entry : distances.long2DoubleEntrySet()) {
-            assert entry.getDoubleValue() != Double.MAX_VALUE;
+    }
+
+    private void dijkstraIteration(@Nullable Vertex finish, TreeSet<DijNode> queue) {
+        final DijNode node = queue.pollFirst();
+        Vertex v = g.getVertices().get(node.getId());
+
+        for (Vertex u : v.getNeighbors()) {
+            assert u.containsNeighbor(v);
+            final DijNode uNode = new DijNode(u.getId(), distances.get(u.getIdentificator()));
+            if (!queue.contains(uNode)) {
+                continue;
+            }
+            double d = distances.get(v.getIdentificator()) + v.getDistance(u);
+            if (d < distances.get(u.getIdentificator())) {
+                queue.remove(uNode);
+                distances.put(u.getIdentificator(), d);
+                prev[u.getId()] = v;
+                queue.add(new DijNode(u.getId(), d));
+                if (finish != null && u.getIdentificator() == finish.getIdentificator()) {
+                    queue.clear();
+                    break;
+                }
+            }
         }
     }
 
@@ -78,7 +85,7 @@ public class DijkstraAlgorithm {
         assert distances != null;
         assert prev != null;
         final double distance = distances.get(u.getIdentificator());
-        assert distance != 0;
+//        assert distance != 0;
         return distance;
     }
 

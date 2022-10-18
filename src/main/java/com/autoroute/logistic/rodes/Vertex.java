@@ -45,11 +45,13 @@ public class Vertex {
     public double getDistance(Vertex neighbor) {
         for (int i = 0; i < neighbors.size(); i++) {
             var v = neighbors.get(i);
-            if (v.getId() == neighbor.getId()) {
+            if (v.getIdentificator() == neighbor.getIdentificator()) {
                 return distances[i];
             }
         }
-        throw new IllegalStateException();
+        // TODO: fix it
+        return LatLon.distanceKM(latLon, neighbor.getLatLon());
+//        throw new IllegalStateException();
     }
 
     public boolean addNeighbor(Vertex v) {
@@ -79,6 +81,10 @@ public class Vertex {
 
     public List<Vertex> getNeighbors() {
         return neighbors;
+    }
+
+    public boolean containsNeighbor(Vertex v) {
+        return neighbors.contains(v);
     }
 
     public void setId(int id) {

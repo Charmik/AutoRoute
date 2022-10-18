@@ -9,7 +9,7 @@ import java.util.List;
 
 public class GpxGenerator {
 
-    public static GPX generate(List<LatLon> coordinates, List<WayPoint> wayPoints) {
+    public static GPX generateRouteWithWaypoints(List<LatLon> coordinates, List<WayPoint> wayPoints) {
         var builder = GPX.builder()
             .addTrack(track -> track
                 .addSegment(segment -> {
@@ -37,7 +37,7 @@ public class GpxGenerator {
         return builder.build();
     }
 
-    public static GPX generate(List<Vertex> vertices) {
+    public static GPX generateWithNeighbors(List<Vertex> vertices) {
         var builder = GPX.builder();
         for (Vertex v : vertices) {
             for (Vertex n : v.getNeighbors()) {

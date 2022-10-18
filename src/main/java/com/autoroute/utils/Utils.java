@@ -8,6 +8,7 @@ import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.osm.LatLon;
 import io.jenetics.jpx.GPX;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,8 +48,8 @@ public class Utils {
     public static void writeGPX(List<Vertex> vertices, int index) {
 
         try {
-            GPX.write(GpxGenerator.generate(vertices),
-                Paths.get("o/ZZZ_" + index + ".gpx"));
+            GPX.write(GpxGenerator.generateRoute(vertices),
+                Paths.get("o/" + index + ".gpx"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -57,8 +58,10 @@ public class Utils {
     public static void writeGPX(List<Vertex> vertices, String prefix, int index) {
         final GPX cycleGPX = GpxGenerator.generateRoute(vertices);
         try {
+            final String dirPath = "o/" + prefix;
+            new File(dirPath).mkdirs();
             GPX.write(cycleGPX,
-                Paths.get("o/" + prefix + index + ".gpx"));
+                Paths.get(dirPath + index + ".gpx"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -98,11 +101,10 @@ public class Utils {
 
     public static OverpassResponse readVertices() {
         OverpassResponse r = new OverpassResponse();
-//        final List<String> lines = Files.readAllLines(Paths.get("tmp/bor_15.txt"));
-//        final List<String> lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
         final List<String> lines;
         try {
-            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
+//            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
+            lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

@@ -2,8 +2,6 @@ package com.autoroute;
 
 import com.autoroute.api.overpass.Box;
 import com.autoroute.api.overpass.OverPassAPI;
-import com.autoroute.gpx.GpxGenerator;
-import com.autoroute.gpx.RouteDuplicateDetector;
 import com.autoroute.logistic.PointVisiter;
 import com.autoroute.logistic.RouteDistanceAlgorithm;
 import com.autoroute.osm.LatLon;
@@ -15,15 +13,12 @@ import com.autoroute.telegram.db.Database;
 import com.autoroute.telegram.db.Row;
 import com.autoroute.telegram.db.Settings;
 import com.autoroute.telegram.db.State;
-import com.autoroute.utils.Utils;
-import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -91,35 +86,15 @@ public class Main {
                 "with your criteria:( Please provide another distances or start point");
             return;
         }
+        // TODO: save routes to zip & send it
 
-        LOGGER.info("Start visit waypoints from the route");
-
-        for (WayPoint wayPoint : response.wayPoints()) {
-            pointVisiter.visit(user, wayPoint);
-        }
-
-        LOGGER.info("Start generate GPX for the route");
-        final GPX gpx = GpxGenerator.generate(response.coordinates(), response.wayPoints());
-        for (WayPoint wayPoint : response.wayPoints()) {
-            LOGGER.info("https://www.openstreetmap.org/node/{}", wayPoint.id());
-        }
-
-        final Path tracksFolder = Utils.pathForRoute(startPoint, minDistance, maxDistance);
-        tracksFolder.toFile().mkdirs();
-
-        LOGGER.info("Start reading all tracks");
-        var tracks = RouteDuplicateDetector.readTracks(startPoint, minDistance, maxDistance);
-        var index = tracks.size() + 1;
-        final Path gpxPath = tracksFolder.resolve(index + ".gpx");
-        LOGGER.info("save a route as: {}", gpxPath);
-        GPX.write(gpx, gpxPath);
 
         db.updateRow(dbRow.withState(State.GOT_ALL_ROUTES));
         telegramBot.sendMessage(chatId,
             "Your routes are ready! You can use this site to look at your route: https://gpx.studio/.\n" +
                 "You need to download generated .gpx file and load it on the site: Load GPX.\n" +
                 "If you want more routes - You can use /repeat command. It will generate another route with the same location/distance.");
-        telegramBot.sendFile(chatId, gpxPath);
+        // telegramBot.sendFile(chatId, gpxPath);
     }
 
     private Settings readSqlSettings() {

@@ -147,7 +147,7 @@ public class Graph {
             return;
         }
 
-        if (cycle.tryAddCycle(this, fullGraph, startVertex, result, cycle, dijkstra, minKM, maxKM)) {
+        if (cycle.tryAddCycle(this, fullGraph, startVertex, result, dijkstra, minKM, maxKM)) {
 
         }
     }
@@ -347,6 +347,14 @@ public class Graph {
         return superVertices;
     }
 
+    public Vertex findByIdentificator(long identificator) {
+        // TODO: create a map for it
+        return vertices.stream()
+            .filter(e -> e.getIdentificator() == identificator)
+            .findAny()
+            .orElse(null);
+    }
+
     public int size() {
         return vertices.size();
     }
@@ -409,7 +417,8 @@ public class Graph {
                     bestVertex = midV;
                 }
             }
-            if (bestVertex == null || countMaxNeighbours < 300) {
+            if (bestVertex == null || countMaxNeighbours < 75) {
+//            if (bestVertex == null || countMaxNeighbours < 500) {
                 if (tries == 50) {
                     break;
                 } else {
