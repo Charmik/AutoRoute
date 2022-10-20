@@ -1,7 +1,7 @@
 package com.autoroute.logistic.rodes;
 
 import com.autoroute.osm.LatLon;
-import com.autoroute.utils.Utils;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
@@ -22,6 +22,7 @@ public class Graph {
     private static final Logger LOGGER = LogManager.getLogger(Graph.class);
 
     private List<Vertex> vertices;
+    Long2ObjectOpenHashMap<Vertex> identificatorToVertex = null;
     private List<Vertex> superVertices = null;
     private final int maxKM;
     private final int minKM;
@@ -349,12 +350,19 @@ public class Graph {
         return superVertices;
     }
 
+    public void buildIdentificatorToVertexMap() {
+        assert identificatorToVertex == null;
+        identificatorToVertex = new Long2ObjectOpenHashMap<>();
+        for (Vertex v : vertices) {
+            identificatorToVertex.put(v.getIdentificator(), v);
+        }
+    }
+
     public Vertex findByIdentificator(long identificator) {
-        // TODO: create a map for it
-        return vertices.stream()
-            .filter(e -> e.getIdentificator() == identificator)
-            .findAny()
-            .orElse(null);
+        assert identificatorToVertex != null;
+        final Vertex v = identificatorToVertex.get(identificator);
+        assert v != null;
+        return v;
     }
 
     public int size() {
@@ -434,7 +442,7 @@ public class Graph {
             // LOGGER.info("delete neighbours: {} now have: {}", countMaxNeighbours, vertices.size());
             final Vertex v = bestVertex;
             v.setSuperVertex();
-            List<Vertex> closeVertexes = new ArrayList<>();
+            Set<Vertex> closeVertexes = new HashSet<>();
             for (int j = 0; j < vertices.size(); j++) {
                 Vertex u = vertices.get(j);
                 if (v.getId() == u.getId() || u.getIdentificator() == identificatorStartVertex) {
