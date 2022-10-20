@@ -5,6 +5,8 @@ import com.autoroute.utils.Utils;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,11 +14,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public record Cycle(List<Vertex> vertices) {
+public class Cycle {
 
     private static final Logger LOGGER = LogManager.getLogger(Cycle.class);
 
-    private static int COUNT = 0;
+    private final List<Vertex> vertices;
+    private @Nullable List<Vertex> compactVertices = null;
+
+    public Cycle(List<Vertex> vertices) {
+        this.vertices = vertices;
+    }
+
+    public void setCompactVertices(@NotNull List<Vertex> compactVertices) {
+        assert compactVertices != null;
+        this.compactVertices = compactVertices;
+    }
 
     public boolean tryAddCycle(Graph g, Graph fullGraph, Vertex startVertex, List<Cycle> result,
                                DijkstraAlgorithm dijkstra, int minKM, int maxKM) {
@@ -26,9 +38,7 @@ public record Cycle(List<Vertex> vertices) {
         final int superVertexes = countSuperVertexes();
 
         if (1 == 1
-            && (routeDistance > minKM && routeDistance < maxKM)
-            && (cycleDistance > minKM / 2)
-            && (cycleDistance > routeDistance / 100 * 30)
+            && isGoodDistance(cycleDistance, distanceToCycle, minKM, maxKM)
             && !isInCity(countSuperVertexes())
             // TODO: && don't cross yourself
         ) {
@@ -37,16 +47,15 @@ public record Cycle(List<Vertex> vertices) {
             if (isInCity(countSuperVertexes())) {
                 return false;
             }
-            // TODO: create Routa class. save small cycle too - check it for duplicate, not from full graph.
+            // TODO: create Route class. save small cycle too - check it for duplicate, not from full graph.
             if (!hasDuplicate(g, result) && !getReversedVertices().hasDuplicate(g, result)) {
                 Utils.writeGPX(vertices, "cycles/1_", result.size());
-                LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {} cycle_length: {}",
-                    result.size(), distanceToCycle, cycleDistance, routeDistance, superVertexes, size());
 
-//                cycle.isGood();
-//                cycle.hasAnInternalCycle();
+                if (!replaceSuperVertexesInPath(fullGraph)) {
+                    return false;
+                }
+                Utils.writeGPX(vertices, "cycles/2_", result.size());
 
-                replaceSuperVertexesInPath(fullGraph);
                 List<Vertex> fullGraphVertexes = new ArrayList<>();
                 for (Vertex v : vertices) {
                     fullGraphVertexes.add(fullGraph.findByIdentificator(v.getIdentificator()));
@@ -54,12 +63,32 @@ public record Cycle(List<Vertex> vertices) {
 
                 Cycle fullCycle = new Cycle(fullGraphVertexes);
 
-                Utils.writeGPX(fullCycle.vertices, "cycles/2_", result.size());
                 fullCycle.removeExternalCycles(cycleDistance);
                 Utils.writeGPX(fullCycle.vertices, "cycles/3_", result.size());
-                result.add(fullCycle);
+
+                final double distanceToFullCycle = fullCycle.minDistanceToCycle(startVertex, dijkstra);
+                final double cycleFullDistance = getCycleDistance(fullCycle.vertices);
+
+                if (isGoodDistance(cycleFullDistance, distanceToFullCycle, minKM, maxKM)) {
+                    LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {} cycle_length: {}",
+                        result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes, size());
+                    fullCycle.setCompactVertices(vertices);
+                    result.add(fullCycle);
+                }
                 return true;
             }
+        }
+        return false;
+    }
+
+    private boolean isGoodDistance(double cycleDistance, double distanceToCycle, double minKM, double maxKM) {
+        double routeDistance = distanceToCycle * 2 + cycleDistance;
+        if (1 == 1
+            && (cycleDistance > minKM / 2)
+            && routeDistance < maxKM
+            && (cycleDistance > routeDistance / 100 * 30)
+        ) {
+            return true;
         }
         return false;
     }
@@ -82,11 +111,12 @@ public record Cycle(List<Vertex> vertices) {
 
     }
 
-    private void replaceSuperVertexesInPath(Graph fullGraph) {
+    private boolean replaceSuperVertexesInPath(Graph fullGraph) {
         assert size() > 3;
         boolean progress = true;
         while (progress) {
             progress = false;
+            assert vertices.size() > 2;
             while (vertices.get(0).isSuperVertex() || vertices.get(vertices.size() - 1).isSuperVertex()) {
                 var v = vertices.get(vertices.size() - 1);
                 var u = vertices.get(0);
@@ -109,21 +139,44 @@ public record Cycle(List<Vertex> vertices) {
                 if (superVertex.isSuperVertex()) {
                     int startIndex = i - 1;
                     int finishIndex = i + 1;
-                    while (!vertices.get(finishIndex).isSuperVertex() && finishIndex < vertices.size() - 1 && finishIndex < i + 1 + diff) {
+                    while (!vertices.get(finishIndex).isSuperVertex()
+                        && finishIndex < vertices.size() - 1
+                        && finishIndex < i + 1 + diff) {
                         finishIndex++;
                     }
-//                    LOGGER.info("size0: {} startIndex: {} finishIndex: {}", vertices.size(), startIndex, finishIndex);
                     assert finishIndex - startIndex >= 2;
-//                    if (finishIndex + diff < vertices.size()) {
-//                        finishIndex += diff;
-//                    }
                     var v = vertices.get(startIndex);
                     var u = vertices.get(finishIndex);
-                    final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
-                    alg.run(u);
-                    var vToUPath = alg.getRouteFromFullGraph(u);
+                    Pair p = new Pair(v.getIdentificator(), u.getIdentificator());
+                    List<Vertex> vToUPath;
+                    final List<Vertex> cachePath = cache.get(p);
+                    if (cachePath == null) {
+                        final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
+                        alg.run(u);
+                        vToUPath = alg.getRouteFromFullGraph(u);
+                        cache.put(p, vToUPath);
+                        miss++;
+                        if (miss % 500 == 0) {
+                            LOGGER.info("cache hit: {} miss: {}", hit, miss);
+                        }
+                    } else {
+                        vToUPath = cachePath;
+                        hit++;
+                        if (hit % 500 == 0) {
+                            LOGGER.info("cache hit: {} miss: {}", hit, miss);
+                        }
+                    }
 
-//                    LOGGER.info("vToUPath size: {}", vToUPath.size());
+                    final double oldDistance = v.getDistance(u);
+                    final double newDistanceOfPath = getCycleDistance(vToUPath);
+                    assert newDistanceOfPath >= oldDistance;
+                    // distance increased significantly, probably with superNode we went over river/big road
+                    // where we can't really ride. Can we do it better here?
+                    if (oldDistance * 3 < newDistanceOfPath) {
+                        LOGGER.info("oldDistance: {}, newDistanceOfPath: {}", oldDistance, newDistanceOfPath);
+                        return false;
+                    }
+
                     assert vToUPath.size() >= 2;
                     assert v.getIdentificator() == vToUPath.get(0).getIdentificator();
                     assert u.getIdentificator() == vToUPath.get(vToUPath.size() - 1).getIdentificator();
@@ -134,11 +187,8 @@ public record Cycle(List<Vertex> vertices) {
                     for (Vertex vertex : vToUPath) {
                         assert !vertex.isSuperVertex();
                     }
-//                    LOGGER.info("size1: {} startIndex: {} finishIndex: {}", vertices.size(), startIndex, finishIndex);
                     vertices.subList(startIndex, finishIndex).clear();
-//                    LOGGER.info("size2: {} startIndex: {} finishIndex: {}", vertices.size(), startIndex, finishIndex);
                     vertices.addAll(startIndex, vToUPath);
-//                    LOGGER.info("size3: {} startIndex: {} finishIndex: {}", vertices.size(), startIndex, finishIndex);
                     progress = true;
                 }
             }
@@ -150,24 +200,26 @@ public record Cycle(List<Vertex> vertices) {
                 assert !vertex.isSuperVertex();
             }
         }
+        return true;
     }
 
     private boolean hasDuplicate(Graph g, List<Cycle> oldCycles) {
         for (var oldCycle : oldCycles) {
             // can't be done over array of boolean by index because cycle can contain vertexes from another graph
             Long2BooleanOpenHashMap visited = new Long2BooleanOpenHashMap(g.getVertices().size());
-            for (int i = 0; i < oldCycle.vertices().size(); i++) {
-                var v = oldCycle.vertices().get(i);
+            assert oldCycle.compactVertices != null;
+            for (int i = 0; i < oldCycle.compactVertices.size(); i++) {
+                var v = oldCycle.compactVertices.get(i);
                 visited.put(v.getIdentificator(), true);
             }
             int count = 0;
-            for (Vertex u : vertices()) {
+            for (Vertex u : vertices) {
                 final boolean value = visited.get(u.getIdentificator());
                 if (value) {
                     count++;
                 }
             }
-            if (count > ((double) vertices().size()) / 10d * 5d) {
+            if (count > ((double) vertices.size()) / 10d * 5d) {
                 return true;
             }
         }
@@ -177,7 +229,7 @@ public record Cycle(List<Vertex> vertices) {
     private double minDistanceToCycle(Vertex startVertex, DijkstraAlgorithm dijkstra) {
         dijkstra.assertStartVertex(startVertex);
         double minDistance = Double.MAX_VALUE;
-        for (Vertex v : vertices()) {
+        for (Vertex v : vertices) {
             final double distanceToV = dijkstra.getDistance(v);
             if (distanceToV < minDistance) {
                 minDistance = distanceToV;
@@ -367,5 +419,9 @@ public record Cycle(List<Vertex> vertices) {
             return true;
         }
         return false;
+    }
+
+    public List<Vertex> getVertices() {
+        return vertices;
     }
 }

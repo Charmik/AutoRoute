@@ -100,6 +100,8 @@ public class RouteDistanceAlgorithm {
         final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
         var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
         dijkstra.run();
+        fullGraph.buildIdentificatorToVertexMap();
+        fullGraph.calculateDistanceForNeighbours();
 
 
         Graph compactGraph = GraphBuilder.buildGraph(response, start,
@@ -126,6 +128,7 @@ public class RouteDistanceAlgorithm {
         int tries = 0;
         final List<Cycle> cycles = new ArrayList<>();
         g.calculateDistanceForNeighbours();
+        g.buildIdentificatorToVertexMap();
         int newSize;
         List<List<Vertex>> routes = new ArrayList<>();
         do {
@@ -142,8 +145,8 @@ public class RouteDistanceAlgorithm {
                     double minDistanceToCycle = Double.MAX_VALUE;
                     Vertex closestVertex = null;
                     int indexClosestVertex = -1;
-                    for (int j = 0; j < cycle.vertices().size(); j++) {
-                        Vertex v = cycle.vertices().get(j);
+                    for (int j = 0; j < cycle.size(); j++) {
+                        Vertex v = cycle.getVertices().get(j);
                         final double distanceToV = dijkstra.getDistance(v);
                         if (distanceToV < minDistanceToCycle) {
                             minDistanceToCycle = distanceToV;
@@ -158,10 +161,10 @@ public class RouteDistanceAlgorithm {
                     assert routeToCycle.get(routeToCycle.size() - 1).getIdentificator() == closestVertex.getIdentificator();
 
                     final List<Vertex> fullRoute = new ArrayList<>(routeToCycle);
-                    int j = (indexClosestVertex + 1) % cycle.vertices().size();
+                    int j = (indexClosestVertex + 1) % cycle.size();
                     while (j != indexClosestVertex) {
-                        fullRoute.add(cycle.vertices().get(j));
-                        j = (j + 1) % cycle.vertices().size();
+                        fullRoute.add(cycle.getVertices().get(j));
+                        j = (j + 1) % cycle.size();
                     }
                     Collections.reverse(routeToCycle);
                     fullRoute.addAll(routeToCycle);
@@ -179,7 +182,7 @@ public class RouteDistanceAlgorithm {
         routes.sort(Comparator.comparingDouble(Cycle::getCycleDistanceSlow));
         for (int i = 0; i < cycles.size(); i++) {
             var cycle = cycles.get(i);
-            Utils.writeGPX(cycle.vertices(), "sort/", i);
+            Utils.writeGPX(cycle.getVertices(), "sort/", i);
         }
 
         LOGGER.info("findAllCycles finished, found: {} cycles", cycles.size());
