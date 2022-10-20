@@ -1,5 +1,7 @@
-package com.autoroute.logistic.rodes;
+package com.autoroute.logistic.rodes.dijkstra;
 
+import com.autoroute.logistic.rodes.Graph;
+import com.autoroute.logistic.rodes.Vertex;
 import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import org.jetbrains.annotations.NotNull;

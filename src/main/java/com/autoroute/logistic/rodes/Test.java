@@ -1,5 +1,6 @@
 package com.autoroute.logistic.rodes;
 
+import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.osm.LatLon;
 
 import java.util.ArrayList;
@@ -29,7 +30,7 @@ public class Test {
         List<Cycle> cycles = new ArrayList<>();
         final DijkstraAlgorithm alg = new DijkstraAlgorithm(g, v1);
         alg.run();
-        g.findAllCycles(v1, cycles, alg);
+        g.findAllCycles(v1, cycles, alg, null);
         System.out.println(cycles);
     }
 

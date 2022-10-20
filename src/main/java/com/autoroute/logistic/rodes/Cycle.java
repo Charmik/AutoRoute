@@ -1,5 +1,7 @@
 package com.autoroute.logistic.rodes;
 
+import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
+import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import com.autoroute.utils.Utils;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
@@ -10,9 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class Cycle {
 
@@ -31,14 +31,15 @@ public class Cycle {
     }
 
     public boolean tryAddCycle(Graph g, Graph fullGraph, Vertex startVertex, List<Cycle> result,
-                               DijkstraAlgorithm dijkstra, int minKM, int maxKM) {
+                               DijkstraAlgorithm dijkstra, int minKM, int maxKM, DijkstraCache dijkstraCache) {
         final double distanceToCycle = minDistanceToCycle(startVertex, dijkstra);
         final double cycleDistance = getCycleDistance(vertices);
         double routeDistance = distanceToCycle * 2 + cycleDistance;
         final int superVertexes = countSuperVertexes();
 
         if (1 == 1
-            && isGoodDistance(cycleDistance, distanceToCycle, minKM, maxKM)
+            // distance will be increased by full graph
+            && isGoodDistance(cycleDistance * 0.7, distanceToCycle * 0.7, minKM, maxKM)
             && !isInCity(countSuperVertexes())
             // TODO: && don't cross yourself
         ) {
@@ -47,11 +48,10 @@ public class Cycle {
             if (isInCity(countSuperVertexes())) {
                 return false;
             }
-            // TODO: create Route class. save small cycle too - check it for duplicate, not from full graph.
             if (!hasDuplicate(g, result) && !getReversedVertices().hasDuplicate(g, result)) {
                 Utils.writeGPX(vertices, "cycles/1_", result.size());
 
-                if (!replaceSuperVertexesInPath(fullGraph)) {
+                if (!replaceSuperVertexesInPath(fullGraph, dijkstraCache)) {
                     return false;
                 }
                 Utils.writeGPX(vertices, "cycles/2_", result.size());
@@ -70,8 +70,8 @@ public class Cycle {
                 final double cycleFullDistance = getCycleDistance(fullCycle.vertices);
 
                 if (isGoodDistance(cycleFullDistance, distanceToFullCycle, minKM, maxKM)) {
-                    LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {} cycle_length: {}",
-                        result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes, size());
+                    LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {}",
+                        result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes);
                     fullCycle.setCompactVertices(vertices);
                     result.add(fullCycle);
                 }
@@ -102,16 +102,7 @@ public class Cycle {
         return inCity;
     }
 
-    // TODO:REMOVE STATICS
-    private static Map<Pair, List<Vertex>> cache = new HashMap<>();
-    static int hit = 0;
-    static int miss = 0;
-
-    record Pair(long v, long u) {
-
-    }
-
-    private boolean replaceSuperVertexesInPath(Graph fullGraph) {
+    private boolean replaceSuperVertexesInPath(Graph fullGraph, DijkstraCache cache) {
         assert size() > 3;
         boolean progress = true;
         while (progress) {
@@ -147,7 +138,8 @@ public class Cycle {
                     assert finishIndex - startIndex >= 2;
                     var v = vertices.get(startIndex);
                     var u = vertices.get(finishIndex);
-                    Pair p = new Pair(v.getIdentificator(), u.getIdentificator());
+
+                    var p = new DijkstraCache.Pair(v.getIdentificator(), u.getIdentificator());
                     List<Vertex> vToUPath;
                     final List<Vertex> cachePath = cache.get(p);
                     if (cachePath == null) {
@@ -155,16 +147,8 @@ public class Cycle {
                         alg.run(u);
                         vToUPath = alg.getRouteFromFullGraph(u);
                         cache.put(p, vToUPath);
-                        miss++;
-                        if (miss % 500 == 0) {
-                            LOGGER.info("cache hit: {} miss: {}", hit, miss);
-                        }
                     } else {
                         vToUPath = cachePath;
-                        hit++;
-                        if (hit % 500 == 0) {
-                            LOGGER.info("cache hit: {} miss: {}", hit, miss);
-                        }
                     }
 
                     final double oldDistance = v.getDistance(u);
@@ -173,7 +157,7 @@ public class Cycle {
                     // distance increased significantly, probably with superNode we went over river/big road
                     // where we can't really ride. Can we do it better here?
                     if (oldDistance * 3 < newDistanceOfPath) {
-                        LOGGER.info("oldDistance: {}, newDistanceOfPath: {}", oldDistance, newDistanceOfPath);
+                        // LOGGER.info("oldDistance: {}, newDistanceOfPath: {}", oldDistance, newDistanceOfPath);
                         return false;
                     }
 
@@ -213,13 +197,21 @@ public class Cycle {
                 visited.put(v.getIdentificator(), true);
             }
             int count = 0;
-            for (Vertex u : vertices) {
-                final boolean value = visited.get(u.getIdentificator());
-                if (value) {
+            for (Vertex v : vertices) {
+                boolean found = false;
+                for (Vertex u : v.getNeighbors()) {
+                    final boolean value = visited.get(u.getIdentificator());
+                    if (value) {
+                        found = true;
+                        break;
+                    }
+                }
+                final boolean value = visited.get(v.getIdentificator());
+                if (value || found) {
                     count++;
                 }
             }
-            if (count > ((double) vertices.size()) / 10d * 5d) {
+            if (count > ((double) vertices.size()) / 10d * 8d) {
                 return true;
             }
         }
@@ -319,6 +311,7 @@ public class Cycle {
                 for (int j = i + 5; j <= finishIndex; j++) {
                     final Vertex v = vertices.get(i);
                     final Vertex u = vertices.get(j);
+                    // TODO: if they are very close by distance - try to merge it with dijkstra?
                     if (v.getNeighbors().contains(u)) {
                         final List<Vertex> subList = vertices.subList(i + 1, j - 1);
                         // can't use getCycleDistance because we remove subgraph - they are not neighbors (can use when we can for perf)

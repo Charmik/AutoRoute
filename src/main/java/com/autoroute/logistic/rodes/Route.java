@@ -1,6 +1,10 @@
 package com.autoroute.logistic.rodes;
 
-public record Route(Vertex start, Cycle cycle) {
+import java.util.List;
+
+// route can contains vertex from compact & full graph. cycle contains vertexes only from compact graph
+public record Route(List<Vertex> route, Cycle cycle) {
+
 
 
 }

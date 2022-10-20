@@ -76,7 +76,7 @@ public class Main {
 
         final int minDistance = dbRow.minDistance();
         final int maxDistance = dbRow.maxDistance();
-        var response = routeDistanceAlgorithm.buildRoute(startPoint,
+        var response = routeDistanceAlgorithm.buildRoutes(startPoint,
             minDistance, maxDistance, wayPoints, pointVisiter, 5);
         final long chatId = dbRow.chatId();
         if (response == null) {

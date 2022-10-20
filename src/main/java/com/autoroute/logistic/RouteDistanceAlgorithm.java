@@ -6,10 +6,11 @@ import com.autoroute.api.trip.services.OsrmAPI;
 import com.autoroute.api.trip.services.OsrmResponse;
 import com.autoroute.api.trip.services.TooManyCoordinatesException;
 import com.autoroute.logistic.rodes.Cycle;
-import com.autoroute.logistic.rodes.DijkstraAlgorithm;
+import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.GraphBuilder;
 import com.autoroute.logistic.rodes.Vertex;
+import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
 import com.autoroute.utils.Utils;
@@ -55,19 +56,18 @@ public class RouteDistanceAlgorithm {
     }
 
     @Nullable
-    public OsrmResponse buildRoute(LatLon start,
-                                   int minDistance,
-                                   int maxDistance,
-                                   final List<WayPoint> wayPoints,
-                                   PointVisiter pointVisiter,
-                                   int threads) {
+    public OsrmResponse buildRoutes(LatLon start,
+                                    int minDistance,
+                                    int maxDistance,
+                                    final List<WayPoint> wayPoints,
+                                    PointVisiter pointVisiter,
+                                    int threads) {
         LOGGER.info("Start buildRoute");
-
 //        final OverpassResponse response =
 //            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistance * 1000);
 //                Utils.writeVertecesToFile(response);
         final OverpassResponse response = Utils.readVertices();
-        return buildRoute(response, start, minDistance, maxDistance, wayPoints);
+        return buildRoutes(response, start, minDistance, maxDistance, wayPoints);
     }
 
     /**
@@ -80,22 +80,11 @@ public class RouteDistanceAlgorithm {
      * @param currentWayPoints waypoints
      */
     @Nullable
-    private OsrmResponse buildRoute(OverpassResponse response,
-                                    LatLon start,
-                                    int minDistance,
-                                    int maxDistance,
-                                    final List<WayPoint> currentWayPoints) {
-
-//        start = new LatLon(34.7657, 32.8728);
-//        LatLon finish = new LatLon(34.7762, 32.9380);
-//        Graph fullGraph = GraphBuilder.buildFullGraph(response, start, minDistance, maxDistance);
-//        final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
-//        var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
-//        dijkstra.run();
-//        System.out.println(dijkstra.getDistance(fullGraph.findNearestVertex(finish)));
-//        System.exit(42);
-
-
+    private OsrmResponse buildRoutes(OverpassResponse response,
+                                     LatLon start,
+                                     int minDistance,
+                                     int maxDistance,
+                                     final List<WayPoint> currentWayPoints) {
         Graph fullGraph = GraphBuilder.buildFullGraph(response, start, minDistance, maxDistance);
         final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
         var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
@@ -131,9 +120,12 @@ public class RouteDistanceAlgorithm {
         g.buildIdentificatorToVertexMap();
         int newSize;
         List<List<Vertex>> routes = new ArrayList<>();
+
+        final DijkstraCache dijkstraCache = new DijkstraCache();
+        long lastTimeFoundNewRouteTimestamp = 0;
         do {
             int oldSize = cycles.size();
-            g.findAllCycles(startVertex, cycles, dijkstra);
+            g.findAllCycles(startVertex, cycles, dijkstra, dijkstraCache);
 
             newSize = cycles.size();
             if (cycles.size() > oldSize) {
@@ -157,7 +149,6 @@ public class RouteDistanceAlgorithm {
                     assert closestVertex != null;
                     assert indexClosestVertex != -1;
                     final List<Vertex> routeToCycle = dijkstra.getRouteFromFullGraph(closestVertex);
-//                        Utils.writeGPX(routeToCycle, "orig2_", i);
                     assert routeToCycle.get(routeToCycle.size() - 1).getIdentificator() == closestVertex.getIdentificator();
 
                     final List<Vertex> fullRoute = new ArrayList<>(routeToCycle);
@@ -169,15 +160,24 @@ public class RouteDistanceAlgorithm {
                     Collections.reverse(routeToCycle);
                     fullRoute.addAll(routeToCycle);
                     routes.add(fullRoute);
-                    Utils.writeGPX(fullRoute, i);
+                    // TODO: put distance in Route class which we return
+                    Utils.writeGPX(fullRoute, i + "_" + (int) Cycle.getCycleDistanceSlow(fullRoute));
+                    lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
                 }
                 tries = 0;
+                continue;
             }
             tries++;
+            final long now = System.currentTimeMillis();
+            final int MAX_FINDING_TIME = 3 * 60 * 1000;
+            if (now - lastTimeFoundNewRouteTimestamp > MAX_FINDING_TIME) {
+                LOGGER.info("couldn't find a new route for more then: {} seconds", MAX_FINDING_TIME / 1000);
+                break;
+            }
             if (tries % 10 == 0) {
                 LOGGER.info("build cycles tries: {}", tries);
             }
-        } while (tries != 500 && newSize < 500);
+        } while (tries != 5000 && newSize < 500);
 
         routes.sort(Comparator.comparingDouble(Cycle::getCycleDistanceSlow));
         for (int i = 0; i < cycles.size(); i++) {

@@ -45,6 +45,10 @@ public class Utils {
         }
     }
 
+    public static void writeGPX(List<Vertex> vertices, String name) {
+        writeGPX(GpxGenerator.generateRoute(vertices), "o/" + name + ".gpx");
+    }
+
     public static void writeGPX(List<Vertex> vertices, int index) {
         writeGPX(GpxGenerator.generateRoute(vertices), "o/" + index + ".gpx");
     }
@@ -100,8 +104,8 @@ public class Utils {
         OverpassResponse r = new OverpassResponse();
         final List<String> lines;
         try {
-//            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
-            lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
+            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
+//            lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
