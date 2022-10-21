@@ -57,7 +57,8 @@ public class DijkstraAlgorithm {
 
     private void dijkstraIteration(@Nullable Vertex finish, TreeSet<DijNode> queue) {
         final DijNode node = queue.pollFirst();
-        Vertex v = g.getVertices().get(node.getId());
+        assert node != null;
+        Vertex v = g.getVertices().get(node.id());
 
         for (Vertex u : v.getNeighbors()) {
             assert u.containsNeighbor(v);
@@ -86,20 +87,13 @@ public class DijkstraAlgorithm {
     public double getDistance(Vertex u) {
         assert distances != null;
         assert prev != null;
-        final double distance = distances.get(u.getIdentificator());
-//        assert distance != 0;
-        return distance;
+        return distances.get(u.getIdentificator());
     }
 
     public List<Vertex> getRouteFromFullGraph(Vertex u) {
         u = g.findNearestVertex(u.getLatLon());
         assert g.getVertices().contains(u);
-        // TODO: do we need this for?
-//        for (Vertex vertex : g.getVertices()) {
-//            if (vertex.getIdentificator() == u.getIdentificator()) {
-//                u = vertex;
-//            }
-//        }
+
         List<Vertex> route = new ArrayList<>();
         Vertex k = u;
         while (k != null) {
@@ -118,29 +112,14 @@ public class DijkstraAlgorithm {
         return route;
     }
 
-    private static class DijNode implements Comparable<DijNode> {
-        private final int id;
-        private final double distance;
-
-        private DijNode(int id, double distance) {
-            this.id = id;
-            this.distance = distance;
-        }
-
-        public int getId() {
-            return id;
-        }
-
-        public double getDistance() {
-            return distance;
-        }
+    private record DijNode(int id, double distance) implements Comparable<DijNode> {
 
         @Override
-        public int compareTo(@NotNull DijNode o) {
-            if (distance == o.distance) {
-                return Integer.compare(id, o.id);
+            public int compareTo(@NotNull DijNode o) {
+                if (distance == o.distance) {
+                    return Integer.compare(id, o.id);
+                }
+                return Double.compare(distance, o.distance);
             }
-            return Double.compare(distance, o.distance);
         }
-    }
 }
