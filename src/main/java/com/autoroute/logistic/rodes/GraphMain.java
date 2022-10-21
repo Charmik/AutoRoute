@@ -20,7 +20,7 @@ public class GraphMain {
         final long startTime = System.currentTimeMillis();
         LOGGER.info("Start process request");
         final int MIN_KM = 30;
-        final int MAX_KM = 60;
+        final int MAX_KM = 50;
 
 //        final LatLon start = new LatLon(59.908977, 29.068520); // bor
         final LatLon start = new LatLon(34.701020, 33.098470); // cyprus

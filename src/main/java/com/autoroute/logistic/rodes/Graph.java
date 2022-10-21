@@ -152,8 +152,10 @@ public class Graph {
             return;
         }
 
-        if (cycle.tryAddCycle(this, fullGraph, startVertex, result, dijkstra, minKM, maxKM, dijkstraCache)) {
+        if (cycle.tryAddCycle(fullGraph, startVertex, result, dijkstra, minKM, maxKM, dijkstraCache)) {
 
+        } else {
+            // TODO: get some result from tryAddCycle. if distance too big - don't go deeper in dfs?
         }
     }
 

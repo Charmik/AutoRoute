@@ -122,7 +122,7 @@ public class RouteDistanceAlgorithm {
         List<List<Vertex>> routes = new ArrayList<>();
 
         final DijkstraCache dijkstraCache = new DijkstraCache();
-        long lastTimeFoundNewRouteTimestamp = 0;
+        long lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
         do {
             int oldSize = cycles.size();
             g.findAllCycles(startVertex, cycles, dijkstra, dijkstraCache);
@@ -161,7 +161,7 @@ public class RouteDistanceAlgorithm {
                     fullRoute.addAll(routeToCycle);
                     routes.add(fullRoute);
                     // TODO: put distance in Route class which we return
-                    Utils.writeGPX(fullRoute, i + "_" + (int) Cycle.getCycleDistanceSlow(fullRoute));
+                    Utils.writeGPX(fullRoute, (int) Cycle.getCycleDistanceSlow(fullRoute) + "_" + i);
                     lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
                 }
                 tries = 0;
@@ -174,7 +174,7 @@ public class RouteDistanceAlgorithm {
                 LOGGER.info("couldn't find a new route for more then: {} seconds", MAX_FINDING_TIME / 1000);
                 break;
             }
-            if (tries % 10 == 0) {
+            if (tries % 100 == 0) {
                 LOGGER.info("build cycles tries: {}", tries);
             }
         } while (tries != 5000 && newSize < 500);
