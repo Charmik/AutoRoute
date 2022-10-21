@@ -4,7 +4,6 @@ import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import com.autoroute.utils.Utils;
-import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -30,7 +29,7 @@ public class Cycle {
         this.compactVertices = compactVertices;
     }
 
-    public boolean tryAddCycle(Graph g, Graph fullGraph, Vertex startVertex, List<Cycle> result,
+    public boolean tryAddCycle(Graph fullGraph, Vertex startVertex, List<Cycle> result,
                                DijkstraAlgorithm dijkstra, int minKM, int maxKM, DijkstraCache dijkstraCache) {
         final double distanceToCycle = minDistanceToCycle(startVertex, dijkstra);
         final double cycleDistance = getCycleDistance(vertices);
@@ -39,8 +38,8 @@ public class Cycle {
 
         if (1 == 1
             // distance will be increased by full graph
-            && isGoodDistance(cycleDistance * 0.7, distanceToCycle * 0.7, minKM, maxKM)
-            && !isInCity(countSuperVertexes())
+            && isGoodDistance(cycleDistance, distanceToCycle, minKM * 0.7, maxKM)
+            && !isInCity(superVertexes)
             // TODO: && don't cross yourself
         ) {
 //            LOGGER.info("index: {} length: {}", result.size(), vertices.size());
@@ -48,7 +47,7 @@ public class Cycle {
             if (isInCity(countSuperVertexes())) {
                 return false;
             }
-            if (!hasDuplicate(g, result) && !getReversedVertices().hasDuplicate(g, result)) {
+            if (!hasDuplicate(result) && !getReversedVertices().hasDuplicate(result)) {
                 Utils.writeGPX(vertices, "cycles/1_", result.size());
 
                 if (!replaceSuperVertexesInPath(fullGraph, dijkstraCache)) {
@@ -84,15 +83,17 @@ public class Cycle {
     private boolean isGoodDistance(double cycleDistance, double distanceToCycle, double minKM, double maxKM) {
         double routeDistance = distanceToCycle * 2 + cycleDistance;
         if (1 == 1
-            && (cycleDistance > minKM / 2)
-            && routeDistance < maxKM
-            && (cycleDistance > routeDistance / 100 * 30)
+//            && (cycleDistance > minKM / 2)
+            && routeDistance >= minKM
+            && routeDistance <= maxKM
+            && (cycleDistance > routeDistance * 0.3)
         ) {
             return true;
         }
         return false;
     }
 
+    // TODO: rewrite by loading cities from OSM
     private boolean isInCity(int superVertexes) {
         boolean inCity = false;
         if ((vertices.size() < 150 && superVertexes > ((double) vertices.size() / 100 * 10)
@@ -187,33 +188,60 @@ public class Cycle {
         return true;
     }
 
-    private boolean hasDuplicate(Graph g, List<Cycle> oldCycles) {
+    private boolean hasDuplicate(List<Cycle> oldCycles) {
+        final List<LatLon> curBox = getBoxByCycle(this);
+        assert isCycleInsideBox(this, curBox);
+
         for (var oldCycle : oldCycles) {
-            // can't be done over array of boolean by index because cycle can contain vertexes from another graph
-            Long2BooleanOpenHashMap visited = new Long2BooleanOpenHashMap(g.getVertices().size());
-            assert oldCycle.compactVertices != null;
-            for (int i = 0; i < oldCycle.compactVertices.size(); i++) {
-                var v = oldCycle.compactVertices.get(i);
-                visited.put(v.getIdentificator(), true);
-            }
-            int count = 0;
-            for (Vertex v : vertices) {
-                boolean found = false;
-                for (Vertex u : v.getNeighbors()) {
-                    final boolean value = visited.get(u.getIdentificator());
-                    if (value) {
-                        found = true;
-                        break;
-                    }
-                }
-                final boolean value = visited.get(v.getIdentificator());
-                if (value || found) {
-                    count++;
-                }
-            }
-            if (count > ((double) vertices.size()) / 10d * 8d) {
+            final List<LatLon> box = getBoxByCycle(oldCycle);
+            if (isCycleInsideBox(this, box) && isCycleInsideBox(oldCycle, curBox)) {
                 return true;
             }
+        }
+        return false;
+    }
+
+    private List<LatLon> getBoxByCycle(Cycle c) {
+        LatLon minX = new LatLon(Double.MAX_VALUE, Double.MAX_VALUE);
+        LatLon minY = new LatLon(Double.MAX_VALUE, Double.MAX_VALUE);
+        LatLon maxX = new LatLon(Double.MIN_VALUE, Double.MIN_VALUE);
+        LatLon maxY = new LatLon(Double.MIN_VALUE, Double.MIN_VALUE);
+        for (Vertex v : c.vertices) {
+            final LatLon latLon = v.getLatLon();
+            if (latLon.lat() < minX.lat()) {
+                minX = latLon;
+            }
+            if (latLon.lon() < minY.lon()) {
+                minY = latLon;
+            }
+            if (latLon.lat() > maxX.lat()) {
+                maxX = latLon;
+            }
+            if (latLon.lon() > maxY.lon()) {
+                maxY = latLon;
+            }
+        }
+        return List.of(minX, minY, maxX, maxY);
+    }
+
+    private boolean isCycleInsideBox(Cycle c, List<LatLon> list) {
+        assert list.size() == 4;
+        LatLon minX = list.get(0);
+        LatLon minY = list.get(1);
+        LatLon maxX = list.get(2);
+        LatLon maxY = list.get(3);
+        int count = 0;
+        for (Vertex v : c.vertices) {
+            final LatLon latLon = v.getLatLon();
+            if (latLon.lat() > minX.lat() &&
+                latLon.lon() > minY.lon() &&
+                latLon.lat() < maxX.lat() &&
+                latLon.lon() < maxY.lon()) {
+                count++;
+            }
+        }
+        if (count > ((double) c.vertices.size()) * 0.7) {
+            return true;
         }
         return false;
     }
