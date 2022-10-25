@@ -1,4 +1,4 @@
-package com.autoroute.tags;
+package com.autoroute.osm.tags;
 
 import com.autoroute.osm.Tag;
 

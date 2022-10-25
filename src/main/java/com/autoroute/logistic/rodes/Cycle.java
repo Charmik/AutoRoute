@@ -38,7 +38,7 @@ public class Cycle {
 
         if (1 == 1
             // distance will be increased by full graph
-            && isGoodDistance(cycleDistance, distanceToCycle, minKM * 0.7, maxKM)
+            && isGoodDistance(cycleDistance, distanceToCycle, minKM * 0.7, maxKM * 0.8)
             && !isInCity(superVertexes)
             // TODO: && don't cross yourself
         ) {
@@ -71,6 +71,8 @@ public class Cycle {
                 if (isGoodDistance(cycleFullDistance, distanceToFullCycle, minKM, maxKM)) {
                     LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {}",
                         result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes);
+
+                    // TODO: reverse cycle, depends on the country left/right roads
                     fullCycle.setCompactVertices(vertices);
                     result.add(fullCycle);
                 }
@@ -190,11 +192,13 @@ public class Cycle {
 
     private boolean hasDuplicate(List<Cycle> oldCycles) {
         final List<LatLon> curBox = getBoxByCycle(this);
-        assert isCycleInsideBox(this, curBox);
+        assert isCycleInsideBox(this, curBox, 1);
 
         for (var oldCycle : oldCycles) {
             final List<LatLon> box = getBoxByCycle(oldCycle);
-            if (isCycleInsideBox(this, box) && isCycleInsideBox(oldCycle, curBox)) {
+            assert isCycleInsideBox(oldCycle, box, 1);
+            double comparePercent = 0.9;
+            if (isCycleInsideBox(this, box, comparePercent) && isCycleInsideBox(oldCycle, curBox, comparePercent)) {
                 return true;
             }
         }
@@ -224,23 +228,24 @@ public class Cycle {
         return List.of(minX, minY, maxX, maxY);
     }
 
-    private boolean isCycleInsideBox(Cycle c, List<LatLon> list) {
+    private boolean isCycleInsideBox(Cycle c, List<LatLon> list, double percent) {
         assert list.size() == 4;
-        LatLon minX = list.get(0);
-        LatLon minY = list.get(1);
-        LatLon maxX = list.get(2);
-        LatLon maxY = list.get(3);
+        double EPS = 0.01;
+        double minX = list.get(0).lat() - EPS;
+        double minY = list.get(1).lon() - EPS;
+        double maxX = list.get(2).lat() + EPS;
+        double maxY = list.get(3).lon() + EPS;
         int count = 0;
         for (Vertex v : c.vertices) {
             final LatLon latLon = v.getLatLon();
-            if (latLon.lat() > minX.lat() &&
-                latLon.lon() > minY.lon() &&
-                latLon.lat() < maxX.lat() &&
-                latLon.lon() < maxY.lon()) {
+            if (latLon.lat() >= minX &&
+                latLon.lon() >= minY &&
+                latLon.lat() <= maxX &&
+                latLon.lon() <= maxY) {
                 count++;
             }
         }
-        if (count > ((double) c.vertices.size()) * 0.7) {
+        if (count > ((double) c.vertices.size()) * percent) {
             return true;
         }
         return false;

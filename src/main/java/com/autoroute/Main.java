@@ -7,7 +7,7 @@ import com.autoroute.logistic.RouteDistanceAlgorithm;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.Tag;
 import com.autoroute.osm.WayPoint;
-import com.autoroute.tags.TagsFileReader;
+import com.autoroute.osm.tags.TagsFileReader;
 import com.autoroute.telegram.Bot;
 import com.autoroute.telegram.db.Database;
 import com.autoroute.telegram.db.Row;

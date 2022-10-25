@@ -3,9 +3,11 @@ package com.autoroute.gpx;
 import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
+import com.autoroute.sight.Sight;
 import io.jenetics.jpx.GPX;
 
 import java.util.List;
+import java.util.Set;
 
 public class GpxGenerator {
 
@@ -25,7 +27,7 @@ public class GpxGenerator {
         return builder.build();
     }
 
-    public static GPX generateRoute(List<Vertex> vertices) {
+    public static GPX generateRoute(List<Vertex> vertices, Set<Sight> sights) {
         var builder = GPX.builder()
             .addTrack(track -> track
                 .addSegment(segment -> {
@@ -34,6 +36,11 @@ public class GpxGenerator {
                         segment.addPoint(p -> p.lat(coordinate.lat()).lon(coordinate.lon()));
                     }
                 }));
+        for (Sight wayPoint : sights) {
+            builder.addWayPoint(b -> b.lat(wayPoint.latLon().lat())
+                .lon(wayPoint.latLon().lon())
+                .name(wayPoint.name()));
+        }
         return builder.build();
     }
 

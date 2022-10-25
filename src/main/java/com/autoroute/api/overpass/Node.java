@@ -1,8 +1,11 @@
 package com.autoroute.api.overpass;
 
 import com.autoroute.osm.LatLon;
+import com.autoroute.osm.Tag;
 
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public record Node(long id, Map<String, String> tags, LatLon latLon) {
 
@@ -21,6 +24,13 @@ public record Node(long id, Map<String, String> tags, LatLon latLon) {
                 .append("\n");
         }
         return name.toString();
+    }
+
+    public Set<Tag> getTags() {
+        return tags.entrySet()
+            .stream()
+            .map(e -> new Tag(e.getKey(), e.getValue()))
+            .collect(Collectors.toSet());
     }
 
     @Override

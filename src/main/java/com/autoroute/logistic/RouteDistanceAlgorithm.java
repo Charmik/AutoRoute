@@ -1,5 +1,8 @@
 package com.autoroute.logistic;
 
+import com.autoroute.Constants;
+import com.autoroute.api.overpass.Box;
+import com.autoroute.api.overpass.Node;
 import com.autoroute.api.overpass.OverPassAPI;
 import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.api.trip.services.OsrmAPI;
@@ -13,6 +16,9 @@ import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
+import com.autoroute.osm.tags.TagsFileReader;
+import com.autoroute.osm.tags.SightMapper;
+import com.autoroute.sight.Sight;
 import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -24,8 +30,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -33,6 +41,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 public class RouteDistanceAlgorithm {
 
@@ -57,17 +66,17 @@ public class RouteDistanceAlgorithm {
 
     @Nullable
     public OsrmResponse buildRoutes(LatLon start,
-                                    int minDistance,
-                                    int maxDistance,
+                                    int minDistanceKM,
+                                    int maxDistanceKM,
                                     final List<WayPoint> wayPoints,
                                     PointVisiter pointVisiter,
                                     int threads) {
         LOGGER.info("Start buildRoute");
 //        final OverpassResponse response =
-//            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistance * 1000);
+//            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistanceKM * 1000);
 //                Utils.writeVertecesToFile(response);
         final OverpassResponse response = Utils.readVertices();
-        return buildRoutes(response, start, minDistance, maxDistance, wayPoints);
+        return buildRoutes(response, start, minDistanceKM, maxDistanceKM, wayPoints);
     }
 
     /**
@@ -104,7 +113,65 @@ public class RouteDistanceAlgorithm {
         var routes =
             generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
 
+        double diffDegree = ((double) maxDistance / Constants.KM_IN_ONE_DEGREE) / 2;
+        final Box box = new Box(
+            start.lat() - diffDegree,
+            start.lon() - diffDegree,
+            start.lat() + diffDegree,
+            start.lon() + diffDegree
+        );
 
+        var overPassAPI = new OverPassAPI();
+        var tagsReader = new TagsFileReader();
+        tagsReader.readTags();
+        // TODO: do asynchronous with building cycles
+        final var overpassResponse = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
+        var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes());
+        sights.sort(Comparator.comparingInt(Sight::rating).reversed());
+        sights = sights.stream()
+            .filter(s -> s.name() != null)
+            .collect(Collectors.toList());
+        for (Sight sight : sights) {
+            if (sight.name() != null) {
+                System.out.println(sight.rating() + " https://www.openstreetmap.org/node/" + sight.id());
+            }
+        }
+
+        for (int routeIndex = 0; routeIndex < routes.size(); routeIndex++) {
+            var route = routes.get(routeIndex);
+            Set<Sight> sightsInRoute = new HashSet<>();
+            int i = 0;
+            int sightsCount = 0;
+            while (i < route.size()) {
+                var v = route.get(i);
+
+                for (Sight sight : sights) {
+                    if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.3) {
+                        final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
+                        final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
+                        dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
+                        dijkstra.run(sightVertex);
+                        final List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
+                        final ArrayList<Vertex> reversedPath = new ArrayList<>(routeFromVToSight);
+                        Collections.reverse(reversedPath);
+                        routeFromVToSight.addAll(reversedPath);
+                        // TODO: check that distance < maxDistance
+                        // TODO: need to check if i + 1 bigger than route.size() ?
+                        route.addAll(i + 1, routeFromVToSight);
+                        sightsInRoute.add(sight);
+                        sights.remove(sight);
+                        LOGGER.info("route: {} added sight: {}", routeIndex, sight);
+                        i = 0;
+                        sightsCount++;
+                        break;
+                    }
+                }
+                i++;
+            }
+            if (sightsCount > 0) {
+                Utils.writeGPX(route, sightsInRoute, "2_" + i + "_" + (int) Cycle.getCycleDistanceSlow(route), i);
+            }
+        }
         return null;
     }
 
@@ -161,7 +228,7 @@ public class RouteDistanceAlgorithm {
                     fullRoute.addAll(routeToCycle);
                     routes.add(fullRoute);
                     // TODO: put distance in Route class which we return
-                    Utils.writeGPX(fullRoute, (int) Cycle.getCycleDistanceSlow(fullRoute) + "_" + i);
+                    Utils.writeGPX(fullRoute, "routes/1_" + i + "_" + (int) Cycle.getCycleDistanceSlow(fullRoute));
                     lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
                 }
                 tries = 0;
@@ -169,7 +236,7 @@ public class RouteDistanceAlgorithm {
             }
             tries++;
             final long now = System.currentTimeMillis();
-            final int MAX_FINDING_TIME = 3 * 60 * 1000;
+            final int MAX_FINDING_TIME = 30 * 60 * 1000;
             if (now - lastTimeFoundNewRouteTimestamp > MAX_FINDING_TIME) {
                 LOGGER.info("couldn't find a new route for more then: {} seconds", MAX_FINDING_TIME / 1000);
                 break;
@@ -177,13 +244,7 @@ public class RouteDistanceAlgorithm {
             if (tries % 100 == 0) {
                 LOGGER.info("build cycles tries: {}", tries);
             }
-        } while (tries != 5000 && newSize < 500);
-
-        routes.sort(Comparator.comparingDouble(Cycle::getCycleDistanceSlow));
-        for (int i = 0; i < cycles.size(); i++) {
-            var cycle = cycles.get(i);
-            Utils.writeGPX(cycle.getVertices(), "sort/", i);
-        }
+        } while (tries != 50000 && newSize < 500);
 
         LOGGER.info("findAllCycles finished, found: {} cycles", cycles.size());
         return routes;

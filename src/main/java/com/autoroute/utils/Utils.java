@@ -6,6 +6,7 @@ import com.autoroute.api.overpass.Way;
 import com.autoroute.gpx.GpxGenerator;
 import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.osm.LatLon;
+import com.autoroute.sight.Sight;
 import io.jenetics.jpx.GPX;
 
 import java.io.File;
@@ -15,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public class Utils {
 
@@ -46,23 +48,24 @@ public class Utils {
     }
 
     public static void writeGPX(List<Vertex> vertices, String name) {
-        writeGPX(GpxGenerator.generateRoute(vertices), "o/" + name + ".gpx");
-    }
-
-    public static void writeGPX(List<Vertex> vertices, int index) {
-        writeGPX(GpxGenerator.generateRoute(vertices), "o/" + index + ".gpx");
+        writeGPX(GpxGenerator.generateRoute(vertices, Collections.emptySet()), "o/" + name + ".gpx");
     }
 
     public static void writeGPX(List<Vertex> vertices, String prefix, int index) {
-        final GPX cycleGPX = GpxGenerator.generateRoute(vertices);
-        final String dirPath = "o/" + prefix;
-        new File(dirPath).mkdirs();
-        writeGPX(cycleGPX, dirPath + index + ".gpx");
+        writeGPX(vertices, Collections.emptySet(), prefix, index);
+    }
+
+    public static void writeGPX(List<Vertex> vertices, Set<Sight> sights, String prefix, int index) {
+        final GPX cycleGPX = GpxGenerator.generateRoute(vertices, sights);
+        final String name = "o/" + prefix + index + ".gpx";
+        writeGPX(cycleGPX, name);
     }
 
     public static void writeGPX(GPX gpx, String name) {
         try {
-            GPX.write(gpx, Paths.get(name));
+            final Path path = Paths.get(name);
+            path.getParent().toAbsolutePath().toFile().mkdirs();
+            GPX.write(gpx, path);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
