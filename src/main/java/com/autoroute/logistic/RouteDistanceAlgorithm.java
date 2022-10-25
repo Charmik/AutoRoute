@@ -105,6 +105,7 @@ public class RouteDistanceAlgorithm {
         Graph compactGraph = GraphBuilder.buildGraph(response, start,
             startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
         compactGraph.setFullGraph(fullGraph);
+        compactGraph.calculateDistanceForNeighbours();
 
         var startVertexCompactGraph = compactGraph.findNearestVertex(start);
 

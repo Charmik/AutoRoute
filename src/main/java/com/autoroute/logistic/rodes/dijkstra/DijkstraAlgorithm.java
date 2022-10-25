@@ -30,7 +30,6 @@ public class DijkstraAlgorithm {
     }
 
     public void run(@Nullable Vertex finish) {
-        g.calculateDistanceForNeighbours();
         final List<Vertex> vertices = g.getVertices();
 
         this.prev = new Vertex[vertices.size()];
