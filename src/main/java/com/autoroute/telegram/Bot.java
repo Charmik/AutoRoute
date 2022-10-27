@@ -37,14 +37,12 @@ public class Bot extends TelegramLongPollingBot {
 
     private static final String SEND_DISTANCE_MESSAGE = """
         We got your location. Now please provide minimum and maximum distance for your trip via space.
-        Difference between them should be more than 20km. Minimum distance is 20km. 
+        Difference between them should be more than 20km. Minimum distance is 30km. 
         They can't be more than 150km.
         Example: \"50 100\"""";
 
     private static final String WAITING_FOR_RESULT = """
-        You sent all information, your routes are in progress. 
-        Please be patient for them, it can takes hours for now. 
-        Only 1 route will be generated for now, will be fixed later.
+        You sent all information, your routes are in progress. It takes approximately 3 minutes.
         """;
 
     private static final String START_COMMAND = "Please start Bot with /start command.";
@@ -180,7 +178,7 @@ public class Bot extends TelegramLongPollingBot {
             final Integer maxDistance = Utils.parseInteger(splitText[1]);
             if (minDistance == null ||
                 maxDistance == null ||
-                minDistance < 20 ||
+                minDistance < 30 ||
                 maxDistance < minDistance ||
                 minDistance > 150 ||
                 maxDistance - minDistance < 20 ||

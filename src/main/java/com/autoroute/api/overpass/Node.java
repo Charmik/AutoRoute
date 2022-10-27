@@ -47,4 +47,14 @@ public record Node(long id, Map<String, String> tags, LatLon latLon) {
     public int hashCode() {
         return (int) (id ^ (id >>> 32));
     }
+
+    @Override
+    public String toString() {
+        return "Node{" +
+            "id=" + id +
+            "name=" + getName() +
+            ", tags=" + tags +
+            ", latLon=" + latLon +
+            '}';
+    }
 }

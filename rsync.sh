@@ -1,4 +1,4 @@
 set -ex
-rsync -r -t -a --info=progress2 --exclude 'debug' --exclude 'logs' --exclude 'target' --exclude 'config/cache' --exclude 'config/visit' --exclude 'config/telegramKey.txt' --exclude 'tmp' . charm@virtual:~/
+rsync -r -t -a --info=progress2 src pom.xml run.sh charm@virtual:~/AutoRoute
 
 mvn clean install

@@ -238,7 +238,7 @@ public class RouteDistanceAlgorithm {
             }
             tries++;
             final long now = System.currentTimeMillis();
-            final int MAX_FINDING_TIME = 1 * 10 * 1000;
+            final int MAX_FINDING_TIME = 1 * 60 * 1000;
             if (now - lastTimeFoundNewRouteTimestamp > MAX_FINDING_TIME) {
                 LOGGER.info("couldn't find a new route for more then: {} seconds", MAX_FINDING_TIME / 1000);
                 break;
