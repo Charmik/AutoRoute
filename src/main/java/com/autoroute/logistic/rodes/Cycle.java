@@ -40,20 +40,29 @@ public class Cycle {
             // distance will be increased by full graph
             && isGoodDistance(cycleDistance, distanceToCycle, minKM * 0.7, maxKM * 0.8)
             && !isInCity(superVertexes)
+            && vertices.size() > 50
             // TODO: && don't cross yourself
         ) {
-//            LOGGER.info("index: {} length: {}", result.size(), vertices.size());
+            // To be sure that Start vertex is not changed.
+            while (vertices.get(0).isSuperVertex() || vertices.get(vertices.size() - 1).isSuperVertex()) {
+                var v = vertices.get(0);
+                vertices.remove(0);
+                vertices.add(v);
+            }
             removeExternalCycles(cycleDistance);
             if (isInCity(countSuperVertexes())) {
                 return false;
             }
-            if (!hasDuplicate(result) && !getReversedVertices().hasDuplicate(result)) {
-                Utils.writeGPX(vertices, "cycles/1_", result.size());
+            var duplicateVertices = new ArrayList<>(vertices);
+            var duplicateReversedVertices = new ArrayList<>(duplicateVertices);
+            Collections.reverse(duplicateReversedVertices);
+            if (!hasDuplicate(duplicateVertices, result) && !hasDuplicate(duplicateReversedVertices, result)) {
+                Utils.writeDebugGPX(vertices, "cycles/" + result.size() + "_1");
 
                 if (!replaceSuperVertexesInPath(fullGraph, dijkstraCache)) {
                     return false;
                 }
-                Utils.writeGPX(vertices, "cycles/2_", result.size());
+                Utils.writeDebugGPX(vertices, "cycles/" + result.size() + "_1");
 
                 List<Vertex> fullGraphVertexes = new ArrayList<>();
                 for (Vertex v : vertices) {
@@ -61,10 +70,10 @@ public class Cycle {
                 }
 
                 Cycle fullCycle = new Cycle(fullGraphVertexes);
+                fullCycle.removeExternalCycles(getCycleDistance(vertices));
+                Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + result.size() + "_1");
 
-                fullCycle.removeExternalCycles(cycleDistance);
-                Utils.writeGPX(fullCycle.vertices, "cycles/3_", result.size());
-
+                // TODO: extract code to work only with fullCycle
                 final double distanceToFullCycle = fullCycle.minDistanceToCycle(startVertex, dijkstra);
                 final double cycleFullDistance = getCycleDistance(fullCycle.vertices);
 
@@ -73,7 +82,7 @@ public class Cycle {
                         result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes);
 
                     // TODO: reverse cycle, depends on the country left/right roads
-                    fullCycle.setCompactVertices(vertices);
+                    fullCycle.setCompactVertices(duplicateVertices);
                     result.add(fullCycle);
                 }
                 return true;
@@ -88,7 +97,7 @@ public class Cycle {
 //            && (cycleDistance > minKM / 2)
             && routeDistance >= minKM
             && routeDistance <= maxKM
-            && (cycleDistance > routeDistance * 0.3)
+            && (cycleDistance > routeDistance * 0.5)
         ) {
             return true;
         }
@@ -110,22 +119,9 @@ public class Cycle {
         boolean progress = true;
         while (progress) {
             progress = false;
-            assert vertices.size() > 2;
-            while (vertices.get(0).isSuperVertex() || vertices.get(vertices.size() - 1).isSuperVertex()) {
-                var v = vertices.get(vertices.size() - 1);
-                var u = vertices.get(0);
-                final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
-                alg.run(u);
-                var vToUPath = alg.getRouteFromFullGraph(u);
-                assert v.getIdentificator() == vToUPath.get(0).getIdentificator();
-                assert u.getIdentificator() == vToUPath.get(vToUPath.size() - 1).getIdentificator();
-                var newU = vToUPath.get(vToUPath.size() - 1);
-                vToUPath.remove(vToUPath.size() - 1);
-                vertices.remove(0);
-                vertices.remove(vertices.size() - 1);
-                vertices.addAll(vToUPath);
-                vertices.add(0, newU);
-            }
+            assert vertices.size() > 4;
+            assert vertices.get(0).getIdentificator() == vertices.get(vertices.size() - 1).getIdentificator();
+            assert !vertices.get(0).isSuperVertex() && !vertices.get(vertices.size() - 1).isSuperVertex();
 
             int diff = 5;
             for (int i = 1; i < size() - 1; i++) {
@@ -159,8 +155,8 @@ public class Cycle {
                     assert newDistanceOfPath >= oldDistance;
                     // distance increased significantly, probably with superNode we went over river/big road
                     // where we can't really ride. Can we do it better here?
-                    if (oldDistance * 3 < newDistanceOfPath) {
-                        // LOGGER.info("oldDistance: {}, newDistanceOfPath: {}", oldDistance, newDistanceOfPath);
+                    // TODO: compare it with full distance? if it's small percent - maybe it's okay?
+                    if (oldDistance * 5 < newDistanceOfPath) {
                         return false;
                     }
 
@@ -190,27 +186,30 @@ public class Cycle {
         return true;
     }
 
-    private boolean hasDuplicate(List<Cycle> oldCycles) {
-        final List<LatLon> curBox = getBoxByCycle(this);
-        assert isCycleInsideBox(this, curBox, 1);
+    // TODO: check in the end with full route? some cycle can go via start point, in another add way - get the same route.
+    public static boolean hasDuplicate(List<Vertex> currentCycle, List<Cycle> oldCycles) {
+        final List<LatLon> newBox = getBoxByCycle(currentCycle);
+        assert isCycleInsideBox(currentCycle, newBox, 1);
 
-        for (var oldCycle : oldCycles) {
-            final List<LatLon> box = getBoxByCycle(oldCycle);
-            assert isCycleInsideBox(oldCycle, box, 1);
-            double comparePercent = 0.9;
-            if (isCycleInsideBox(this, box, comparePercent) && isCycleInsideBox(oldCycle, curBox, comparePercent)) {
+        for (int i = 0; i < oldCycles.size(); i++) {
+            var oldCycle = oldCycles.get(i);
+            final List<LatLon> oldBox = getBoxByCycle(oldCycle.vertices);
+            assert isCycleInsideBox(oldCycle.vertices, oldBox, 1);
+            double comparePercent = 0.8;
+            if (isCycleInsideBox(currentCycle, oldBox, comparePercent) &&
+                isCycleInsideBox(oldCycle.vertices, newBox, comparePercent)) {
                 return true;
             }
         }
         return false;
     }
 
-    private List<LatLon> getBoxByCycle(Cycle c) {
+    private static List<LatLon> getBoxByCycle(List<Vertex> vertices) {
         LatLon minX = new LatLon(Double.MAX_VALUE, Double.MAX_VALUE);
         LatLon minY = new LatLon(Double.MAX_VALUE, Double.MAX_VALUE);
         LatLon maxX = new LatLon(Double.MIN_VALUE, Double.MIN_VALUE);
         LatLon maxY = new LatLon(Double.MIN_VALUE, Double.MIN_VALUE);
-        for (Vertex v : c.vertices) {
+        for (Vertex v : vertices) {
             final LatLon latLon = v.getLatLon();
             if (latLon.lat() < minX.lat()) {
                 minX = latLon;
@@ -228,7 +227,7 @@ public class Cycle {
         return List.of(minX, minY, maxX, maxY);
     }
 
-    private boolean isCycleInsideBox(Cycle c, List<LatLon> list, double percent) {
+    private static boolean isCycleInsideBox(List<Vertex> vertices, List<LatLon> list, double percent) {
         assert list.size() == 4;
         double EPS = 0.01;
         double minX = list.get(0).lat() - EPS;
@@ -236,7 +235,7 @@ public class Cycle {
         double maxX = list.get(2).lat() + EPS;
         double maxY = list.get(3).lon() + EPS;
         int count = 0;
-        for (Vertex v : c.vertices) {
+        for (Vertex v : vertices) {
             final LatLon latLon = v.getLatLon();
             if (latLon.lat() >= minX &&
                 latLon.lon() >= minY &&
@@ -245,7 +244,7 @@ public class Cycle {
                 count++;
             }
         }
-        if (count > ((double) c.vertices.size()) * percent) {
+        if (count > ((double) vertices.size()) * percent) {
             return true;
         }
         return false;
@@ -301,9 +300,9 @@ public class Cycle {
     public static double getCycleDistanceSlow(List<Vertex> list) {
         assert list.size() > 2;
         double distCycle = 0;
-        for (int j = 1; j < list.size(); j++) {
-            final Vertex prevV = list.get(j - 1);
-            final Vertex nextV = list.get(j);
+        for (int i = 1; i < list.size(); i++) {
+            final Vertex prevV = list.get(i - 1);
+            final Vertex nextV = list.get(i);
             distCycle += LatLon.distanceKM(prevV.getLatLon(), nextV.getLatLon());
         }
         return distCycle;
@@ -341,7 +340,7 @@ public class Cycle {
             int finishIndex = (int) (((double) vertices.size()) / 100 * 95);
 
             for (int i = startIndex; i <= finishIndex; i++) {
-                for (int j = i + 5; j <= finishIndex; j++) {
+                for (int j = i + 3; j <= finishIndex; j++) {
                     final Vertex v = vertices.get(i);
                     final Vertex u = vertices.get(j);
                     // TODO: if they are very close by distance - try to merge it with dijkstra?
@@ -349,7 +348,7 @@ public class Cycle {
                         final List<Vertex> subList = vertices.subList(i + 1, j - 1);
                         // can't use getCycleDistance because we remove subgraph - they are not neighbors (can use when we can for perf)
                         final double subCycleDistance = getCycleDistanceSlow(subList);
-                        if (subCycleDistance > cycleDistance / 10 * 3) {
+                        if (subCycleDistance > cycleDistance / 10 * 2) {
                             break;
                         }
                         subList.clear();
