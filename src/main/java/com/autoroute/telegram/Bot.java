@@ -14,6 +14,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendDocument;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Location;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -31,18 +32,19 @@ public class Bot extends TelegramLongPollingBot {
     private static final String TELEGRAM_KEY;
 
     private static final String SEND_LOCATION_MESSAGE = """
-        This is auto generator of cycling routes over sights. 
-        Please send your location in the attachment menu. You can choose any location where you want to start your ride.
+        This is auto generator of cycling routes over sights.
+        Please send your location in the attachment menu. You can find it on the left of the bottom, the same button for sending photos on your phone.
+        You can choose any location where you want to start your ride.
         You can forward your old message with location if you want to reuse the old one.""";
 
     private static final String SEND_DISTANCE_MESSAGE = """
         We got your location. Now please provide minimum and maximum distance for your trip via space.
         Difference between them should be more than 20km. Minimum distance is 30km. 
-        They can't be more than 150km.
+        They can't be more than 150km (for now).
         Example: \"50 100\"""";
 
     private static final String WAITING_FOR_RESULT = """
-        You sent all information, your routes are in progress. It takes approximately 3 minutes.
+        You sent all information, your routes are in progress. It will take a few minutes.
         """;
 
     private static final String START_COMMAND = "Please start Bot with /start command.";
@@ -83,6 +85,7 @@ public class Bot extends TelegramLongPollingBot {
             @Nullable final Row dbRow = db.getRow(chatId);
 
             LOGGER.info("got update with chat_id: {}, date: {}, row: {}", chatId, msgDate, dbRow);
+            LOGGER.info("message: {}", update.getMessage().getText());
 
             if (dbRow == null) {
                 processStartCommand(chatId, msgDate, update, null);
@@ -103,8 +106,7 @@ public class Bot extends TelegramLongPollingBot {
             }
             if (!this.telegramSentMessage.get()) {
                 if (dbRow != null && dbRow.state() == State.GOT_ALL_ROUTES) {
-                    sendMessage(chatId, "You need to start bot with /start command. " +
-                        "Or you can use /repeat command to generate another route with the same location and distance");
+                    sendMessage(chatId, "You need to start bot with /start command. ");
                 } else {
                     sendMessage(chatId, START_COMMAND);
                 }
@@ -119,11 +121,13 @@ public class Bot extends TelegramLongPollingBot {
                 LOGGER.info("insert new row on /start: {}", row);
                 db.insertRow(row);
                 sendMessage(chatId, SEND_LOCATION_MESSAGE);
+                sendPhoto(chatId, Paths.get("config").resolve("attachment_img.jpg"));
                 // TOOD: FAILED_TO_PROCESS if we got the same data - skip it.
             } else if (oldRow.state() == State.GOT_ALL_ROUTES || oldRow.state() == State.FAILED_TO_PROCESS) {
                 LOGGER.info("update row on /start: {}", row);
                 db.updateRow(row);
                 sendMessage(chatId, SEND_LOCATION_MESSAGE);
+                sendPhoto(chatId, Paths.get("config").resolve("attachment_img.jpg"));
             } else {
                 sendMessage(chatId, "You route is in progress. Please wait for it.");
             }
@@ -135,7 +139,7 @@ public class Bot extends TelegramLongPollingBot {
             if (oldRow == null) {
                 sendMessage(chatId, "You need to build a route before /repeat.");
             } else if (oldRow.state() == State.GOT_ALL_ROUTES) {
-                sendMessage(chatId, "We started to generate new route with your old data");
+                sendMessage(chatId, "We started to generate routes for you.");
                 Row newRow = oldRow
                     .withState(State.SENT_DISTANCE)
                     .withDate(msgDate);
@@ -153,6 +157,7 @@ public class Bot extends TelegramLongPollingBot {
         final Long chatId = update.getMessage().getChatId();
         if (!update.getMessage().hasLocation()) {
             sendMessage(chatId, SEND_LOCATION_MESSAGE);
+            sendPhoto(chatId, Paths.get("config").resolve("attachment_img.jpg"));
             return;
         }
         final Location location = update.getMessage().getLocation();
@@ -172,6 +177,13 @@ public class Bot extends TelegramLongPollingBot {
             return;
         }
         String text = update.getMessage().getText();
+        text = text.trim();
+        if (text.startsWith("\"") || text.startsWith("“")) {
+            text = text.substring(1);
+        }
+        if (text.endsWith("\"") || text.endsWith("”")) {
+            text = text.substring(0, text.length() - 1);
+        }
         final String[] splitText = text.split(" ");
         if (splitText.length == 2) {
             final Integer minDistance = Utils.parseInteger(splitText[0]);
@@ -212,6 +224,17 @@ public class Bot extends TelegramLongPollingBot {
         SendDocument message = new SendDocument();
         message.setChatId(chatId);
         message.setDocument(new InputFile(file.toFile()));
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void sendPhoto(long chatId, Path file) {
+        SendPhoto message = new SendPhoto();
+        message.setChatId(chatId);
+        message.setPhoto(new InputFile(file.toFile()));
         try {
             execute(message);
         } catch (TelegramApiException e) {

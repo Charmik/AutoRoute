@@ -4,6 +4,7 @@ import com.autoroute.api.overpass.Box;
 import com.autoroute.api.overpass.OverPassAPI;
 import com.autoroute.logistic.PointVisiter;
 import com.autoroute.logistic.RouteDistanceAlgorithm;
+import com.autoroute.logistic.rodes.Cycle;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.Tag;
 import com.autoroute.osm.WayPoint;
@@ -21,7 +22,6 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -53,11 +53,8 @@ public class Main {
                     LOGGER.info("didn't find any rows in db, sleeping...");
                     Thread.sleep(10 * 1000);
                 }
-            } catch (Exception e) {
-                LOGGER.error("exception in main: ", e);
-            } catch (OutOfMemoryError oom) {
-                LOGGER.error("got OOM in main: ", oom);
-                System.exit(2);
+            } catch (Throwable t) {
+                LOGGER.error("exception in main: ", t);
             }
         }
     }
@@ -85,10 +82,12 @@ public class Main {
         }
 
         final Path tracksFolder = Utils.pathForRoute(startPoint, minDistance, maxDistance);
+        Utils.deleteDirectory(tracksFolder.toFile());
         tracksFolder.toFile().mkdirs();
         for (int i = 0; i < routes.size(); i++) {
             var route = routes.get(i);
-            Utils.writeGPX(route, tracksFolder.resolve((i + 1) + ".gpx").toString());
+            final String fileName = (i + 1) + "_" + ((int) (Cycle.getCycleDistanceSlow(route.route()))) + "km.gpx";
+            Utils.writeGPX(route, tracksFolder.resolve(fileName).toString());
         }
         final Path zipPath = tracksFolder.resolve("routes.zip");
         Utils.pack(tracksFolder, zipPath);
@@ -98,8 +97,7 @@ public class Main {
         db.updateRow(dbRow.withState(State.GOT_ALL_ROUTES));
         telegramBot.sendMessage(chatId,
             "Your routes are ready! You can use this site to look at your route: https://gpx.studio/.\n" +
-                "You need to download generated .gpx file and load it on the site: Load GPX.\n" +
-                "If you want more routes - You can use /repeat command. It will generate another route with the same location/distance.");
+                "You need to download generated .gpx file and load it on the site: Load GPX.");
         // telegramBot.sendFile(chatId, gpxPath);
     }
 

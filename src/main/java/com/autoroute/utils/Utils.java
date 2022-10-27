@@ -7,16 +7,15 @@ import com.autoroute.gpx.GpxGenerator;
 import com.autoroute.logistic.rodes.Route;
 import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.osm.LatLon;
-import com.autoroute.sight.Sight;
 import io.jenetics.jpx.GPX;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -110,8 +109,8 @@ public class Utils {
         OverpassResponse r = new OverpassResponse();
         final List<String> lines;
         try {
-            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
-//            lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
+//            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
+            lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -161,5 +160,15 @@ public class Utils {
                     }
                 });
         }
+    }
+
+    public static boolean deleteDirectory(File directoryToBeDeleted) {
+        File[] allContents = directoryToBeDeleted.listFiles();
+        if (allContents != null) {
+            for (File file : allContents) {
+                deleteDirectory(file);
+            }
+        }
+        return directoryToBeDeleted.delete();
     }
 }

@@ -8,16 +8,16 @@ import com.autoroute.api.trip.services.OsrmAPI;
 import com.autoroute.api.trip.services.OsrmResponse;
 import com.autoroute.api.trip.services.TooManyCoordinatesException;
 import com.autoroute.logistic.rodes.Cycle;
-import com.autoroute.logistic.rodes.Route;
-import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.GraphBuilder;
+import com.autoroute.logistic.rodes.Route;
 import com.autoroute.logistic.rodes.Vertex;
+import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
-import com.autoroute.osm.tags.TagsFileReader;
 import com.autoroute.osm.tags.SightMapper;
+import com.autoroute.osm.tags.TagsFileReader;
 import com.autoroute.sight.Sight;
 import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
@@ -32,7 +32,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -51,7 +50,7 @@ public class RouteDistanceAlgorithm {
     // TODO: moved ThreadPool from here
 
     private static final ExecutorService FILTER_NODES_POOL = Executors.newFixedThreadPool(CORES);
-    private static final ExecutorService ALGORITHM_POOL = Executors.newFixedThreadPool(CORES);
+    private static final ExecutorService OSM_POOL = Executors.newFixedThreadPool(CORES);
 
     private final OsrmAPI osrmAPI;
     private final OverPassAPI overPassAPI;
@@ -69,69 +68,61 @@ public class RouteDistanceAlgorithm {
                                    PointVisiter pointVisiter,
                                    int threads) {
         LOGGER.info("Start buildRoute");
-//        final OverpassResponse response =
-//            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistanceKM * 1000);
-//                Utils.writeVertecesToFile(response);
-        final OverpassResponse response = Utils.readVertices();
-        return buildRoutes(response, start, minDistanceKM, maxDistanceKM);
+        final OverpassResponse rodes =
+            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistanceKM * 1000);
+
+        // for fast testing only
+//         Utils.writeVertecesToFile(rodes);
+//         final OverpassResponse rodes = Utils.readVertices();
+        return buildRoutes(rodes, start, minDistanceKM, maxDistanceKM);
     }
 
     /**
      * Build a route with the given distance restrictions via the given way points.
      *
-     * @param response
-     * @param start            Start points of the route
-     * @param minDistance      the minimum distance of the trip.
-     * @param maxDistance      the maximum distance of the trip.
+     * @param rodes
+     * @param start       Start points of the route
+     * @param minDistance the minimum distance of the trip.
+     * @param maxDistance the maximum distance of the trip.
      */
-    private List<Route> buildRoutes(OverpassResponse response,
+    private List<Route> buildRoutes(OverpassResponse rodes,
                                     LatLon start,
                                     int minDistance,
                                     int maxDistance) {
-        final Graph fullGraph = GraphBuilder.buildFullGraph(response, start, minDistance, maxDistance);
-        final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
-        var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
-        fullGraph.calculateDistanceForNeighbours();
-        dijkstra.run();
-        fullGraph.buildIdentificatorToVertexMap();
+        final Future<OverpassResponse> nodesFuture = getNodesAsync(start, maxDistance);
 
+        final Graph fullGraph = GraphBuilder.buildFullGraph(rodes, start, minDistance, maxDistance);
+        LOGGER.info("Start generateRoutes");
+        List<List<Vertex>> routes = generateRoutes(rodes, start, minDistance, maxDistance, fullGraph);
 
-        Graph compactGraph = GraphBuilder.buildGraph(response, start,
-            startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
-        compactGraph.setFullGraph(fullGraph);
-        compactGraph.calculateDistanceForNeighbours();
-
-        var startVertexCompactGraph = compactGraph.findNearestVertex(start);
-
-        assert startVertexFullGraph.getIdentificator() == startVertexCompactGraph.getIdentificator();
-        compactGraph.calculateSuperVertices();
-        var routes =
-            generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
-
-        double diffDegree = ((double) maxDistance / Constants.KM_IN_ONE_DEGREE) / 2;
-        final Box box = new Box(
-            start.lat() - diffDegree,
-            start.lon() - diffDegree,
-            start.lat() + diffDegree,
-            start.lon() + diffDegree
-        );
-
-        var overPassAPI = new OverPassAPI();
-        var tagsReader = new TagsFileReader();
-        tagsReader.readTags();
-        // TODO: do asynchronous with building cycles
-        final var overpassResponse = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
+        LOGGER.info("waiting nodes from async query");
+        final OverpassResponse overpassResponse;
+        try {
+            overpassResponse = nodesFuture.get();
+        } catch (InterruptedException | ExecutionException e) {
+            LOGGER.warn("exception in getting nodes", e);
+            return Collections.emptyList();
+        }
         var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes());
         sights.sort(Comparator.comparingInt(Sight::rating).reversed());
         var goodSights = new ArrayList<>(sights.stream()
             .filter(s -> s.name() != null)
             .filter(s -> s.rating() != 0)
+            .filter(s -> LatLon.distanceKM(s.latLon(), start) > 5)
             .toList());
+        LOGGER.info("found: {} good sights", goodSights.size());
 
-        final List<Route> routesWithSights = routes.stream()
-            .map(vertices -> addSights(vertices, goodSights, fullGraph))
-            .filter(Objects::nonNull)
-            .toList();
+        List<Route> routesWithSights = new ArrayList<>();
+        for (int i = 0; i < routes.size(); i++) {
+            var vertices = routes.get(i);
+            final Route newRoute = addSights(vertices, goodSights, fullGraph);
+            if (!newRoute.sights().isEmpty()) {
+                routesWithSights.add(newRoute);
+            }
+            LOGGER.info("processed: {}/{} routes with: {} sights", i, routes.size(), sights.size());
+        }
+
+        LOGGER.info("found: {} routes with good sights", routesWithSights.size());
 
         int routeCount = 0;
         for (Route route : routesWithSights) {
@@ -139,17 +130,57 @@ public class RouteDistanceAlgorithm {
             Utils.writeDebugGPX(route,
                 routeCount + "_" + (int) (Cycle.getCycleDistanceSlow(route.route())));
         }
+        LOGGER.info("were: {} routes, with sights found: {}", routes.size(), routesWithSights.size());
         return routesWithSights;
+    }
+
+    @NotNull
+    private static List<List<Vertex>> generateRoutes(OverpassResponse rodes, LatLon start, int minDistance, int maxDistance, Graph fullGraph) {
+        final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
+        var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
+        fullGraph.calculateDistanceForNeighbours();
+        dijkstra.run();
+        fullGraph.buildIdentificatorToVertexMap();
+
+        Graph compactGraph = GraphBuilder.buildGraph(rodes, start,
+            startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
+        compactGraph.setFullGraph(fullGraph);
+        compactGraph.calculateDistanceForNeighbours();
+
+        var startVertexCompactGraph = compactGraph.findNearestVertex(start);
+        assert startVertexFullGraph.getIdentificator() == startVertexCompactGraph.getIdentificator();
+        compactGraph.calculateSuperVertices();
+        var routes =
+            generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
+        return routes;
+    }
+
+    @NotNull
+    private static Future<OverpassResponse> getNodesAsync(LatLon start, int maxDistance) {
+        var overPassAPI = new OverPassAPI();
+        var tagsReader = new TagsFileReader();
+        tagsReader.readTags();
+        double diffDegree = ((double) maxDistance / Constants.KM_IN_ONE_DEGREE) / 2;
+        final Box box = new Box(
+            start.lat() - diffDegree,
+            start.lon() - diffDegree,
+            start.lat() + diffDegree,
+            start.lon() + diffDegree
+        );
+        return OSM_POOL.submit(() -> overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags()));
     }
 
     private Route addSights(List<Vertex> route, List<Sight> sights, Graph fullGraph) {
         Set<Sight> sightsInRoute = new HashSet<>();
         int i = 0;
-        int sightsCount = 0;
         while (i < route.size()) {
+            // TODO: use distance of route here
+            if (sightsInRoute.size() > 15) {
+                break;
+            }
             var v = route.get(i);
             for (Sight sight : sights) {
-                if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.3) {
+                if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.2 && !sightsInRoute.contains(sight)) {
                     final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
                     final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
                     var dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
@@ -162,18 +193,14 @@ public class RouteDistanceAlgorithm {
                     // TODO: need to check if i + 1 bigger than route.size() ?
                     route.addAll(i + 1, routeFromVToSight);
                     sightsInRoute.add(sight);
-                    sights.remove(sight);
-                    i = 0;
-                    sightsCount++;
+                    // sights.remove(sight);
+                    i += routeFromVToSight.size();
                     break;
                 }
             }
             i++;
         }
-        if (sightsCount > 0) {
-            return new Route(route, sightsInRoute);
-        }
-        return null;
+        return new Route(route, sightsInRoute);
     }
 
     // TODO: make parallel, 1 dfs for every thread. duplicates in merge-thread once again?

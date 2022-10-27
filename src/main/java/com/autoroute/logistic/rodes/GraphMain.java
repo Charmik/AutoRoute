@@ -17,11 +17,14 @@ public class GraphMain {
     public static void main(String[] args) throws IOException {
         final long startTime = System.currentTimeMillis();
         LOGGER.info("Start process request");
-        final int MIN_KM = 20;
-        final int MAX_KM = 40;
+        final int MIN_KM = 50;
+        final int MAX_KM = 100;
 
-//        final LatLon start = new LatLon(59.908977, 29.068520); // bor
-        final LatLon start = new LatLon(34.711433, 33.131185); // cyprus
+//        final LatLon start = new LatLon(59.897299, 29.078159); // bor
+//        final LatLon start = new LatLon(34.711433, 33.131185); // cyprus
+        final LatLon start = new LatLon(52.335352, 4.887436); // amsterdam
+//        final LatLon start = new LatLon(35.430590, -83.075770); // summer home
+//        final LatLon start = new LatLon(35.430590, -83.075770); // summer home
 
         Files.walk(Paths.get("o"), 10)
             .filter(e -> e.toString().endsWith(".gpx"))

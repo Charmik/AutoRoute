@@ -60,7 +60,6 @@ public class Vertex {
             return true;
         }
         return false;
-//        return neighbors.add(v);
     }
 
     public boolean removeNeighbor(Vertex v) {

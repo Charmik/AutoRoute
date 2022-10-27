@@ -17,6 +17,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class OverPassAPI {
 
@@ -62,7 +63,7 @@ public class OverPassAPI {
         query.append("<print mode=\"meta\"/>\n");
         query.append("</osm-script>");
 
-        LOGGER.info("query:\n{}", query);
+        LOGGER.info("query:\n{}", query.toString().replaceAll("\n",""));
         return executeQuery(query);
     }
 
@@ -120,6 +121,7 @@ public class OverPassAPI {
             }
         };
 
+        AtomicInteger counter = new AtomicInteger(1);
         Repeater.create("Wait to get data by OverPass API")
             .until(() -> {
                 try {
@@ -127,12 +129,13 @@ public class OverPassAPI {
                     overpass.queryElements(query.toString(), handler);
                     return true;
                 } catch (Exception e) {
-                    LOGGER.info("couldn't get data by OverPass API, try to repeat");
+                    LOGGER.info("couldn't get data by OverPass API, try to repeat: {}", counter.get());
+                    counter.incrementAndGet();
                     return false;
                 }
             })
             .limitIterationsTo(20)
-            .backoff(Duration.FIVE_SECONDS, 2, Duration.ONE_MINUTE)
+            .backoff(Duration.FIVE_SECONDS, 2, Duration.seconds(30))
             .run();
         return response;
     }
