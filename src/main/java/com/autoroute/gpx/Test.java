@@ -3,7 +3,6 @@ package com.autoroute.gpx;
 import com.autoroute.logistic.rodes.Cycle;
 import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.osm.LatLon;
-import com.autoroute.utils.Utils;
 import io.jenetics.jpx.GPX;
 import io.jenetics.jpx.Track;
 import io.jenetics.jpx.TrackSegment;
@@ -17,13 +16,18 @@ import java.util.List;
 public class Test {
 
     public static void main(String[] args) throws IOException {
-        run("o/route_19.gpx");
-        run("o/route_20.gpx");
+        final List<Vertex> v1 = run("o/cycles/2_6.gpx");
+        Cycle c1 = new Cycle(v1);
+        final List<Vertex> v2 = run("o/cycles/2_7.gpx");
+        Cycle c2 = new Cycle(v2);
 
-
+        final boolean duplicate1 = Cycle.hasDuplicate(c2.getVertices(), List.of(c1));
+        final boolean duplicate2 = Cycle.hasDuplicate(c1.getVertices(), List.of(c2));
+        System.out.println("duplicate1: " + duplicate1);
+        System.out.println("duplicate2: " + duplicate2);
     }
 
-    private static void run(String name) throws IOException {
+    private static List<Vertex> run(String name) throws IOException {
         final GPX gpx = GPX.read(Paths.get(name));
         final Track track = gpx.tracks().toList().get(0);
         final TrackSegment segment = track.getSegments().get(0);
@@ -41,8 +45,6 @@ public class Test {
             }
             vertices.add(v);
         }
-        Utils.writeGPX(vertices, "QQQ", 666);
-        final Cycle cycle = new Cycle(vertices);
-        System.out.println(cycle.isGood());
+        return vertices;
     }
 }

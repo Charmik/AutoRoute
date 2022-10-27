@@ -13,12 +13,15 @@ import com.autoroute.telegram.db.Database;
 import com.autoroute.telegram.db.Row;
 import com.autoroute.telegram.db.Settings;
 import com.autoroute.telegram.db.State;
+import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -62,12 +65,6 @@ public class Main {
     private static void handleRouteRequest(Database db, Bot telegramBot, TagsFileReader tagsReader, Row dbRow) throws IOException {
         LOGGER.info("got a row: {}", dbRow);
         final LatLon startPoint = dbRow.startPoint();
-        List<WayPoint> wayPoints = readNodes(startPoint, tagsReader, dbRow);
-//        if (wayPoints.size() > 500) {
-//            LOGGER.info("we have too many nodes: {} - use short list", wayPoints.size());
-//            tagsReader.readTags("short_list_tags.txt");
-//            wayPoints = readNodes(startPoint, tagsReader, dbRow);
-//        }
 
         final String user = String.valueOf(dbRow.id());
         var pointVisiter = new PointVisiter();
@@ -76,17 +73,26 @@ public class Main {
 
         final int minDistance = dbRow.minDistance();
         final int maxDistance = dbRow.maxDistance();
-        var response = routeDistanceAlgorithm.buildRoutes(startPoint,
-            minDistance, maxDistance, wayPoints, pointVisiter, 5);
+        var routes = routeDistanceAlgorithm.buildRoutes(startPoint,
+            minDistance, maxDistance, pointVisiter, 5);
         final long chatId = dbRow.chatId();
-        if (response == null) {
-            LOGGER.info("got response = null for row: {}", dbRow);
+        if (routes.isEmpty()) {
+            LOGGER.info("got routes = null for row: {}", dbRow);
             db.updateRow(dbRow.withState(State.FAILED_TO_PROCESS));
             telegramBot.sendMessage(chatId, "Seems like we couldn't build a route " +
                 "with your criteria:( Please provide another distances or start point");
             return;
         }
-        // TODO: save routes to zip & send it
+
+        final Path tracksFolder = Utils.pathForRoute(startPoint, minDistance, maxDistance);
+        tracksFolder.toFile().mkdirs();
+        for (int i = 0; i < routes.size(); i++) {
+            var route = routes.get(i);
+            Utils.writeGPX(route, tracksFolder.resolve((i + 1) + ".gpx").toString());
+        }
+        final Path zipPath = tracksFolder.resolve("routes.zip");
+        Utils.pack(tracksFolder, zipPath);
+        telegramBot.sendFile(chatId, zipPath);
 
 
         db.updateRow(dbRow.withState(State.GOT_ALL_ROUTES));
@@ -99,10 +105,11 @@ public class Main {
 
     private Settings readSqlSettings() {
         try {
+            final String fileName = "sql.properties";
             InputStream iStream = this.getClass().getClassLoader()
-                .getResourceAsStream("sql.properties");
+                .getResourceAsStream(fileName);
             if (iStream == null) {
-                throw new RuntimeException("File not found");
+                throw new RuntimeException("File not found: " + fileName);
             }
             Properties properties = new Properties();
             properties.load(iStream);

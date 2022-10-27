@@ -124,15 +124,10 @@ public class OverPassAPI {
             .until(() -> {
                 try {
                     OverpassMapDataApi overpass = createOverpass();
-
                     overpass.queryElements(query.toString(), handler);
-
                     return true;
-                } catch (OsmConnectionException e) {
-                    LOGGER.info("couldn't get data by OverPass API, try to repeat: ", e);
-                    return false;
                 } catch (Exception e) {
-                    LOGGER.info("couldn't get data by OverPass API, try to repeat: ", e);
+                    LOGGER.info("couldn't get data by OverPass API, try to repeat");
                     return false;
                 }
             })

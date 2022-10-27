@@ -90,12 +90,14 @@ public class DijkstraAlgorithm {
     }
 
     public List<Vertex> getRouteFromFullGraph(Vertex u) {
-        u = g.findNearestVertex(u.getLatLon());
         assert g.getVertices().contains(u);
+        final Vertex newU = g.findNearestVertex(u.getLatLon());
+        assert u.getIdentificator() == newU.getIdentificator();
+        u = newU;
 
         List<Vertex> route = new ArrayList<>();
         Vertex k = u;
-        while (k != null) {
+        while (true) {
             route.add(k);
             Vertex nextVertex = prev[k.getId()];
             if (nextVertex == null) {
@@ -114,11 +116,11 @@ public class DijkstraAlgorithm {
     private record DijNode(int id, double distance) implements Comparable<DijNode> {
 
         @Override
-            public int compareTo(@NotNull DijNode o) {
-                if (distance == o.distance) {
-                    return Integer.compare(id, o.id);
-                }
-                return Double.compare(distance, o.distance);
+        public int compareTo(@NotNull DijNode o) {
+            if (distance == o.distance) {
+                return Integer.compare(id, o.id);
             }
+            return Double.compare(distance, o.distance);
         }
+    }
 }

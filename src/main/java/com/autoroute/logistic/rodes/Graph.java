@@ -130,7 +130,7 @@ public class Graph {
             visited[v.getId()] = true;
 
             final List<Vertex> neighbors = v.getNeighbors();
-            Collections.shuffle(neighbors);
+            Collections.shuffle(neighbors, random);
 
             for (int i = 0; i < neighbors.size(); i++) {
                 Vertex u = neighbors.get(i);

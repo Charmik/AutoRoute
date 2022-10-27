@@ -2,13 +2,13 @@ package com.autoroute.logistic;
 
 import com.autoroute.Constants;
 import com.autoroute.api.overpass.Box;
-import com.autoroute.api.overpass.Node;
 import com.autoroute.api.overpass.OverPassAPI;
 import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.api.trip.services.OsrmAPI;
 import com.autoroute.api.trip.services.OsrmResponse;
 import com.autoroute.api.trip.services.TooManyCoordinatesException;
 import com.autoroute.logistic.rodes.Cycle;
+import com.autoroute.logistic.rodes.Route;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.GraphBuilder;
@@ -23,7 +23,6 @@ import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.net.http.HttpTimeoutException;
 import java.util.ArrayList;
@@ -33,6 +32,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -41,7 +41,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 public class RouteDistanceAlgorithm {
 
@@ -64,19 +63,17 @@ public class RouteDistanceAlgorithm {
         this.overPassAPI = new OverPassAPI();
     }
 
-    @Nullable
-    public OsrmResponse buildRoutes(LatLon start,
-                                    int minDistanceKM,
-                                    int maxDistanceKM,
-                                    final List<WayPoint> wayPoints,
-                                    PointVisiter pointVisiter,
-                                    int threads) {
+    public List<Route> buildRoutes(LatLon start,
+                                   int minDistanceKM,
+                                   int maxDistanceKM,
+                                   PointVisiter pointVisiter,
+                                   int threads) {
         LOGGER.info("Start buildRoute");
 //        final OverpassResponse response =
 //            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistanceKM * 1000);
 //                Utils.writeVertecesToFile(response);
         final OverpassResponse response = Utils.readVertices();
-        return buildRoutes(response, start, minDistanceKM, maxDistanceKM, wayPoints);
+        return buildRoutes(response, start, minDistanceKM, maxDistanceKM);
     }
 
     /**
@@ -86,20 +83,17 @@ public class RouteDistanceAlgorithm {
      * @param start            Start points of the route
      * @param minDistance      the minimum distance of the trip.
      * @param maxDistance      the maximum distance of the trip.
-     * @param currentWayPoints waypoints
      */
-    @Nullable
-    private OsrmResponse buildRoutes(OverpassResponse response,
-                                     LatLon start,
-                                     int minDistance,
-                                     int maxDistance,
-                                     final List<WayPoint> currentWayPoints) {
-        Graph fullGraph = GraphBuilder.buildFullGraph(response, start, minDistance, maxDistance);
+    private List<Route> buildRoutes(OverpassResponse response,
+                                    LatLon start,
+                                    int minDistance,
+                                    int maxDistance) {
+        final Graph fullGraph = GraphBuilder.buildFullGraph(response, start, minDistance, maxDistance);
         final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
         var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
+        fullGraph.calculateDistanceForNeighbours();
         dijkstra.run();
         fullGraph.buildIdentificatorToVertexMap();
-        fullGraph.calculateDistanceForNeighbours();
 
 
         Graph compactGraph = GraphBuilder.buildGraph(response, start,
@@ -129,49 +123,55 @@ public class RouteDistanceAlgorithm {
         final var overpassResponse = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
         var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes());
         sights.sort(Comparator.comparingInt(Sight::rating).reversed());
-        sights = sights.stream()
+        var goodSights = new ArrayList<>(sights.stream()
             .filter(s -> s.name() != null)
-            .collect(Collectors.toList());
-        for (Sight sight : sights) {
-            if (sight.name() != null) {
-                System.out.println(sight.rating() + " https://www.openstreetmap.org/node/" + sight.id());
-            }
+            .filter(s -> s.rating() != 0)
+            .toList());
+
+        final List<Route> routesWithSights = routes.stream()
+            .map(vertices -> addSights(vertices, goodSights, fullGraph))
+            .filter(Objects::nonNull)
+            .toList();
+
+        int routeCount = 0;
+        for (Route route : routesWithSights) {
+            routeCount++;
+            Utils.writeDebugGPX(route,
+                routeCount + "_" + (int) (Cycle.getCycleDistanceSlow(route.route())));
         }
+        return routesWithSights;
+    }
 
-        for (int routeIndex = 0; routeIndex < routes.size(); routeIndex++) {
-            var route = routes.get(routeIndex);
-            Set<Sight> sightsInRoute = new HashSet<>();
-            int i = 0;
-            int sightsCount = 0;
-            while (i < route.size()) {
-                var v = route.get(i);
-
-                for (Sight sight : sights) {
-                    if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.3) {
-                        final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
-                        final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
-                        dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
-                        dijkstra.run(sightVertex);
-                        final List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
-                        final ArrayList<Vertex> reversedPath = new ArrayList<>(routeFromVToSight);
-                        Collections.reverse(reversedPath);
-                        routeFromVToSight.addAll(reversedPath);
-                        // TODO: check that distance < maxDistance
-                        // TODO: need to check if i + 1 bigger than route.size() ?
-                        route.addAll(i + 1, routeFromVToSight);
-                        sightsInRoute.add(sight);
-                        sights.remove(sight);
-                        LOGGER.info("route: {} added sight: {}", routeIndex, sight);
-                        i = 0;
-                        sightsCount++;
-                        break;
-                    }
+    private Route addSights(List<Vertex> route, List<Sight> sights, Graph fullGraph) {
+        Set<Sight> sightsInRoute = new HashSet<>();
+        int i = 0;
+        int sightsCount = 0;
+        while (i < route.size()) {
+            var v = route.get(i);
+            for (Sight sight : sights) {
+                if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.3) {
+                    final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
+                    final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
+                    var dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
+                    dijkstra.run(sightVertex);
+                    final List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
+                    final ArrayList<Vertex> reversedPath = new ArrayList<>(routeFromVToSight);
+                    Collections.reverse(reversedPath);
+                    routeFromVToSight.addAll(reversedPath);
+                    // TODO: check that distance < maxDistance
+                    // TODO: need to check if i + 1 bigger than route.size() ?
+                    route.addAll(i + 1, routeFromVToSight);
+                    sightsInRoute.add(sight);
+                    sights.remove(sight);
+                    i = 0;
+                    sightsCount++;
+                    break;
                 }
-                i++;
             }
-            if (sightsCount > 0) {
-                Utils.writeGPX(route, sightsInRoute, "2_" + i + "_" + (int) Cycle.getCycleDistanceSlow(route), i);
-            }
+            i++;
+        }
+        if (sightsCount > 0) {
+            return new Route(route, sightsInRoute);
         }
         return null;
     }
@@ -225,11 +225,12 @@ public class RouteDistanceAlgorithm {
                         fullRoute.add(cycle.getVertices().get(j));
                         j = (j + 1) % cycle.size();
                     }
+                    // TODO: try to find another way back home if possible if not - take the same way.
                     Collections.reverse(routeToCycle);
                     fullRoute.addAll(routeToCycle);
                     routes.add(fullRoute);
                     // TODO: put distance in Route class which we return
-                    Utils.writeGPX(fullRoute, "routes/1_" + i + "_" + (int) Cycle.getCycleDistanceSlow(fullRoute));
+                    Utils.writeDebugGPX(fullRoute, "routes/" + i + "_" + (int) Cycle.getCycleDistanceSlow(fullRoute));
                     lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
                 }
                 tries = 0;
@@ -237,7 +238,7 @@ public class RouteDistanceAlgorithm {
             }
             tries++;
             final long now = System.currentTimeMillis();
-            final int MAX_FINDING_TIME = 30 * 60 * 1000;
+            final int MAX_FINDING_TIME = 1 * 10 * 1000;
             if (now - lastTimeFoundNewRouteTimestamp > MAX_FINDING_TIME) {
                 LOGGER.info("couldn't find a new route for more then: {} seconds", MAX_FINDING_TIME / 1000);
                 break;
@@ -245,7 +246,8 @@ public class RouteDistanceAlgorithm {
             if (tries % 100 == 0) {
                 LOGGER.info("build cycles tries: {}", tries);
             }
-        } while (tries != 50000 && newSize < 500);
+            // TODO: should depends on the distance. gives more tries for longer routes
+        } while (tries != 25000 && newSize < 100);
 
         LOGGER.info("findAllCycles finished, found: {} cycles", cycles.size());
         return routes;

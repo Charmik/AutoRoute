@@ -4,12 +4,12 @@ import com.autoroute.api.overpass.Node;
 import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.api.overpass.Way;
 import com.autoroute.gpx.GpxGenerator;
+import com.autoroute.logistic.rodes.Route;
 import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.osm.LatLon;
 import com.autoroute.sight.Sight;
 import io.jenetics.jpx.GPX;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,6 +17,8 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 public class Utils {
 
@@ -47,24 +49,25 @@ public class Utils {
         }
     }
 
-    public static void writeGPX(List<Vertex> vertices, String name) {
+    public static void writeDebugGPX(List<Vertex> vertices, String name) {
         writeGPX(GpxGenerator.generateRoute(vertices, Collections.emptySet()), "o/" + name + ".gpx");
     }
 
-    public static void writeGPX(List<Vertex> vertices, String prefix, int index) {
-        writeGPX(vertices, Collections.emptySet(), prefix, index);
+    public static void writeDebugGPX(Route route, String name) {
+        final GPX cycleGPX = GpxGenerator.generateRoute(route.route(), route.sights());
+        final String fileName = "o/" + name + ".gpx";
+        writeGPX(cycleGPX, fileName);
     }
 
-    public static void writeGPX(List<Vertex> vertices, Set<Sight> sights, String prefix, int index) {
-        final GPX cycleGPX = GpxGenerator.generateRoute(vertices, sights);
-        final String name = "o/" + prefix + index + ".gpx";
+    public static void writeGPX(Route route, String name) {
+        final GPX cycleGPX = GpxGenerator.generateRoute(route.route(), route.sights());
         writeGPX(cycleGPX, name);
     }
 
     public static void writeGPX(GPX gpx, String name) {
         try {
             final Path path = Paths.get(name);
-            path.getParent().toAbsolutePath().toFile().mkdirs();
+            path.toAbsolutePath().getParent().toFile().mkdirs();
             GPX.write(gpx, path);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -138,5 +141,25 @@ public class Utils {
         }
         assert r.getWays().size() == waysCount;
         return r;
+    }
+
+    public static void pack(Path sourceDirPath, Path zipFilePath) throws IOException {
+        Files.deleteIfExists(zipFilePath);
+        Path p = Files.createFile(zipFilePath);
+        try (ZipOutputStream zs = new ZipOutputStream(Files.newOutputStream(p))) {
+            Files.walk(sourceDirPath)
+                .filter(path -> !Files.isDirectory(path))
+                .filter(path -> path.toString().endsWith(".gpx"))
+                .forEach(path -> {
+                    ZipEntry zipEntry = new ZipEntry(sourceDirPath.relativize(path).toString());
+                    try {
+                        zs.putNextEntry(zipEntry);
+                        Files.copy(path, zs);
+                        zs.closeEntry();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+        }
     }
 }
