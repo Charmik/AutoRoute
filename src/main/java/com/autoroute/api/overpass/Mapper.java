@@ -2,25 +2,23 @@ package com.autoroute.api.overpass;
 
 import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.Vertex;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArraySet;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 public class Mapper {
 
     private static final Logger LOGGER = LogManager.getLogger(Mapper.class);
 
-    private static Set<Long> getOrCreateSet(Map<Long, Set<Long>> m, long nodeId) {
+    private static LongArraySet getOrCreateSet(Long2ObjectOpenHashMap<LongArraySet> m, long nodeId) {
         var neighbours = m.get(nodeId);
         if (neighbours == null) {
-            neighbours = new HashSet<>();
+            neighbours = new LongArraySet();
         }
         return neighbours;
     }
@@ -37,7 +35,7 @@ public class Mapper {
         final List<Node> nodes = r.getNodes();
         final List<Way> ways = r.getWays();
 
-        Map<Long, Set<Long>> nodeIdToNeighbors = new HashMap<>();
+        Long2ObjectOpenHashMap<LongArraySet> nodeIdToNeighbors = new Long2ObjectOpenHashMap<>();
         for (int i = 0; i < ways.size(); i++) {
             Way w = ways.get(i);
             final long[] nodeIds = w.nodesIds();
@@ -56,27 +54,29 @@ public class Mapper {
                 nodeIdToNeighbors.put(nodeId, neighbours);
             }
         }
+        nodeIdToNeighbors.trim();
         LOGGER.info("Processed all ways");
 
 
-        Map<Long, Node> idToNode = new HashMap<>();
+        Long2ObjectOpenHashMap<Node> idToNode = new Long2ObjectOpenHashMap<>();
         for (Node node : nodes) {
             idToNode.put(node.id(), node);
         }
+        idToNode.trim();
 
-        Map<Long, Vertex> idToVertex = new HashMap<>();
+        Long2ObjectOpenHashMap<Vertex> idToVertex = new Long2ObjectOpenHashMap<>();
         int index = 0;
-        for (Map.Entry<Long, Set<Long>> entry : nodeIdToNeighbors.entrySet()) {
-            final Long nodeId = entry.getKey();
+        for (var entry : nodeIdToNeighbors.long2ObjectEntrySet()) {
+            final long nodeId = entry.getLongKey();
             Node nodeV = idToNode.get(nodeId);
-            final Set<Long> neighbours = entry.getValue();
+            final LongArraySet neighbours = entry.getValue();
             Vertex v = idToVertex.get(nodeId);
             if (v == null) {
                 v = new Vertex(index, nodeV.id(), nodeV.latLon());
                 index++;
                 idToVertex.put(nodeId, v);
             }
-            for (Long neighbour : neighbours) {
+            for (long neighbour : neighbours) {
                 Vertex u = idToVertex.get(neighbour);
                 if (u == null) {
                     Node nodeU = idToNode.get(neighbour);
@@ -89,6 +89,7 @@ public class Mapper {
                 u.addNeighbor(v);
             }
         }
+        idToVertex.trim();
         LOGGER.info("Processed all nodes");
 
         List<Vertex> l = new ArrayList<>(idToVertex.values());
