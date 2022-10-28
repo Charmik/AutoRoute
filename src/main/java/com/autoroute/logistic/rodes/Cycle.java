@@ -202,11 +202,13 @@ public class Cycle {
 
         for (int i = 0; i < oldCycles.size(); i++) {
             var oldCycle = oldCycles.get(i);
-            final List<LatLon> oldBox = getBoxByCycle(oldCycle.vertices);
-            assert isCycleInsideBox(oldCycle.vertices, oldBox, 0.99);
+            final List<Vertex> oldVertices = oldCycle.compactVertices;
+            assert oldVertices != null;
+            final List<LatLon> oldBox = getBoxByCycle(oldVertices);
+            assert isCycleInsideBox(oldVertices, oldBox, 0.99);
             double comparePercent = 0.8;
             if (isCycleInsideBox(currentCycle, oldBox, comparePercent) &&
-                isCycleInsideBox(oldCycle.vertices, newBox, comparePercent)) {
+                isCycleInsideBox(oldVertices, newBox, comparePercent)) {
                 return true;
             }
         }
