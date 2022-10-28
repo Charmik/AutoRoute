@@ -95,22 +95,7 @@ public class RouteDistanceAlgorithm {
         LOGGER.info("Start generateRoutes");
         List<List<Vertex>> routes = generateRoutes(rodes, start, minDistance, maxDistance, fullGraph);
 
-        LOGGER.info("waiting nodes from async query");
-        final OverpassResponse overpassResponse;
-        try {
-            overpassResponse = nodesFuture.get();
-        } catch (InterruptedException | ExecutionException e) {
-            LOGGER.warn("exception in getting nodes", e);
-            return Collections.emptyList();
-        }
-        var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes());
-        sights.sort(Comparator.comparingInt(Sight::rating).reversed());
-        var goodSights = new ArrayList<>(sights.stream()
-            .filter(s -> s.name() != null)
-            .filter(s -> s.rating() != 0)
-            .filter(s -> LatLon.distanceKM(s.latLon(), start) > 5)
-            .toList());
-        LOGGER.info("found: {} good sights", goodSights.size());
+        var goodSights = getSights(nodesFuture, start, maxDistance);
 
         List<Route> routesWithSights = new ArrayList<>();
         for (int i = 0; i < routes.size(); i++) {
@@ -119,9 +104,8 @@ public class RouteDistanceAlgorithm {
             if (!newRoute.sights().isEmpty()) {
                 routesWithSights.add(newRoute);
             }
-            LOGGER.info("processed: {}/{} routes with: {} sights", i, routes.size(), sights.size());
+            LOGGER.info("processed: {}/{} routes with: {} sights", i, routes.size(), goodSights.size());
         }
-
         LOGGER.info("found: {} routes with good sights", routesWithSights.size());
 
         int routeCount = 0;
@@ -153,6 +137,39 @@ public class RouteDistanceAlgorithm {
         var routes =
             generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
         return routes;
+    }
+
+    private List<Sight> getSights(Future<OverpassResponse> nodesFuture, LatLon start, int maxDistance) {
+        LOGGER.info("waiting nodes from async query");
+        OverpassResponse overpassResponse;
+        try {
+            overpassResponse = nodesFuture.get();
+        } catch (InterruptedException | ExecutionException e) {
+            LOGGER.warn("exception in getting nodes", e);
+            return Collections.emptyList();
+        }
+        LOGGER.info("found: {} original sights", overpassResponse.getNodes().size());
+        if (overpassResponse.getNodes().isEmpty()) {
+            LOGGER.info("didn't find any sights, try one time more");
+            nodesFuture = getNodesAsync(start, maxDistance);
+            try {
+                overpassResponse = nodesFuture.get();
+            } catch (InterruptedException | ExecutionException e) {
+                LOGGER.warn("exception in getting nodes", e);
+                return Collections.emptyList();
+            }
+        }
+        assert overpassResponse != null;
+        var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes());
+        sights.sort(Comparator.comparingInt(Sight::rating).reversed());
+        LOGGER.info("found: {} sorted sights", overpassResponse.getNodes().size());
+        var goodSights = new ArrayList<>(sights.stream()
+            .filter(s -> s.name() != null)
+            .filter(s -> s.rating() != 0)
+            .filter(s -> LatLon.distanceKM(s.latLon(), start) > 5)
+            .toList());
+        LOGGER.info("found: {} good sights", goodSights.size());
+        return goodSights;
     }
 
     @NotNull
