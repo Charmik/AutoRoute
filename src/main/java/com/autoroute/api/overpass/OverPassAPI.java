@@ -1,8 +1,8 @@
 package com.autoroute.api.overpass;
 
 import com.autoroute.osm.Tag;
+import com.autoroute.utils.HMInterner;
 import de.westnordost.osmapi.OsmConnection;
-import de.westnordost.osmapi.common.errors.OsmConnectionException;
 import de.westnordost.osmapi.map.data.BoundingBox;
 import de.westnordost.osmapi.map.data.Relation;
 import de.westnordost.osmapi.map.data.Way;
@@ -15,6 +15,7 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -111,7 +112,17 @@ public class OverPassAPI {
             public void handle(Way way) {
                 final List<Long> nodesList = way.getNodeIds();
                 long[] nodes = nodesList.stream().mapToLong(i -> i).toArray();
-                var w = new com.autoroute.api.overpass.Way(way.getId(), nodes, way.getTags());
+
+                final Map<String, String> tags = way.getTags();
+                String[] keys = new String[tags.size()];
+                String[] values = new String[tags.size()];
+                int i = 0;
+                for (Map.Entry<String, String> e : tags.entrySet()) {
+                    keys[i] = HMInterner.INTERNER.intern(e.getKey());
+                    values[i] = HMInterner.INTERNER.intern(e.getValue());
+                    i++;
+                }
+                var w = new com.autoroute.api.overpass.Way(way.getId(), nodes, keys, values);
                 response.add(w);
             }
 

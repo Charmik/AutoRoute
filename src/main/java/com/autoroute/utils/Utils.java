@@ -110,7 +110,8 @@ public class Utils {
         final List<String> lines;
         try {
 //            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
-            lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
+//            lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
+            lines = Files.readAllLines(Paths.get("tmp/amster_150.txt"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -135,7 +136,7 @@ public class Utils {
             for (int j = 1; j < strs.length; j++) {
                 ids[j - 1] = Long.parseLong(strs[j]);
             }
-            final Way way = new Way(id, ids, Collections.emptyMap());
+            final Way way = new Way(id, ids, new String[0], new String[0]);
             r.add(way);
         }
         assert r.getWays().size() == waysCount;

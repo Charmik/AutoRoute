@@ -24,7 +24,6 @@ public class Mapper {
     }
 
     public static Graph mapToGraph(OverpassResponse r, int minDistance, int maxDistance) {
-
         List<Vertex> vertices = getVertices(r);
         LOGGER.info("Start build graph");
         return new Graph(vertices, minDistance, maxDistance);
