@@ -68,6 +68,9 @@ public class Mapper {
         for (var entry : nodeIdToNeighbors.long2ObjectEntrySet()) {
             final long nodeId = entry.getLongKey();
             Node nodeV = idToNode.get(nodeId);
+            if (nodeV == null) { // nodes & ways are not equals, it means this node is too far away.
+                continue;
+            }
             final LongArraySet neighbours = entry.getValue();
             Vertex v = idToVertex.get(nodeId);
             if (v == null) {
@@ -79,6 +82,9 @@ public class Mapper {
                 Vertex u = idToVertex.get(neighbour);
                 if (u == null) {
                     Node nodeU = idToNode.get(neighbour);
+                    if (nodeU == null) { // nodes & ways are not equals, it means this node is too far away.
+                        continue;
+                    }
                     u = new Vertex(index, nodeU.id(), nodeU.latLon());
                     index++;
                     idToVertex.put(neighbour, u);

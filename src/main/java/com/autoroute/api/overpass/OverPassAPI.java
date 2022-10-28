@@ -1,5 +1,6 @@
 package com.autoroute.api.overpass;
 
+import com.autoroute.osm.LatLon;
 import com.autoroute.osm.Tag;
 import com.autoroute.utils.HMInterner;
 import de.westnordost.osmapi.OsmConnection;
@@ -17,22 +18,27 @@ import org.jetbrains.annotations.NotNull;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class OverPassAPI {
 
     private static final Logger LOGGER = LogManager.getLogger(OverPassAPI.class);
 
+    // TODO: add stats by URL
     private static final String[] URLS = {
         "https://overpass-api.de/api/",
         "https://overpass.kumi.systems/api/",
 //        "http://overpass.openstreetmap.ru/cgi/",
 //        "https://overpass.openstreetmap.fr/api/",
     };
+    private final LatLon startVertex;
+    private final int maxDistance;
+    private int indexURL;
 
-    public OverPassAPI() {
-
+    public OverPassAPI(LatLon startVertex, int maxDistance) {
+        this.startVertex = startVertex;
+        this.maxDistance = maxDistance;
+        this.indexURL = 0;
     }
 
     public OverpassResponse getCities(@NotNull Box box, Set<Tag> tags) {
@@ -46,7 +52,7 @@ public class OverPassAPI {
     }
 
     public OverpassResponse getNodesInBoxByTags(@NotNull Box box, Set<Tag> tags) {
-        StringBuilder query = new StringBuilder("<osm-script timeout=\"120\" element-limit=\"1073741824\">\n")
+        StringBuilder query = new StringBuilder("<osm-script timeout=\"360\" element-limit=\"1073741824\">\n")
             .append("<union>\n");
         for (Tag tag : tags) {
             query.append("<query type=\"node\">\n");
@@ -64,12 +70,12 @@ public class OverPassAPI {
         query.append("<print mode=\"meta\"/>\n");
         query.append("</osm-script>");
 
-        LOGGER.info("query:\n{}", query.toString().replaceAll("\n",""));
+        LOGGER.info("query:\n{}", query.toString().replaceAll("\n", ""));
         return executeQuery(query);
     }
 
     public OverpassResponse getRodes(@NotNull com.autoroute.osm.LatLon center, int radiusMeters) {
-        StringBuilder query = new StringBuilder("<osm-script timeout=\"120\" element-limit=\"1073741824\">\n");
+        StringBuilder query = new StringBuilder("<osm-script timeout=\"360\" element-limit=\"1073741824\">\n");
         query.append("<query type=\"way\">\n");
         query.append("<around lat=\"");
         query.append(center.lat());
@@ -91,7 +97,7 @@ public class OverPassAPI {
     }
 
     @NotNull
-    private static OverpassResponse executeQuery(StringBuilder query) {
+    private OverpassResponse executeQuery(StringBuilder query) {
         OverpassResponse response = new OverpassResponse();
 
         final MapDataHandler handler = new MapDataHandler() {
@@ -103,14 +109,18 @@ public class OverPassAPI {
             @Override
             public void handle(de.westnordost.osmapi.map.data.Node node) {
                 var position = node.getPosition();
+                final LatLon latLon = new LatLon(position.getLatitude(), position.getLongitude());
 
-                final Map<String, String> tags = node.getTags();
-                String[] keys = new String[tags.size()];
-                String[] values = new String[tags.size()];
-                mapTagsToArrays(tags, keys, values);
-                var n = new Node(node.getId(), keys, values,
-                    new com.autoroute.osm.LatLon(position.getLatitude(), position.getLongitude()));
-                response.add(n);
+                if (LatLon.distanceKM(latLon, startVertex) < maxDistance / 2) {
+                    final Map<String, String> tags = node.getTags();
+                    String[] keys = new String[tags.size()];
+                    String[] values = new String[tags.size()];
+                    mapTagsToArrays(tags, keys, values);
+
+                    var n = new Node(node.getId(), keys, values,
+                        latLon);
+                    response.add(n);
+                }
             }
 
             @Override
@@ -161,9 +171,10 @@ public class OverPassAPI {
     }
 
     @NotNull
-    private static OverpassMapDataApi createOverpass() {
+    private OverpassMapDataApi createOverpass() {
         int timeout = 10 * 60 * 1000;
-        String url = URLS[ThreadLocalRandom.current().nextInt(URLS.length)];
+        String url = URLS[indexURL];
+        indexURL = (indexURL + 1) % URLS.length;
         OsmConnection connection = new OsmConnection(
             url, "User-Agent: Mozilla/5.0", null, timeout);
         LOGGER.info("Create overpass with url: {}", url);

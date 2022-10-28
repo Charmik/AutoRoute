@@ -1,10 +1,8 @@
 package com.autoroute.integration;
 
-import com.autoroute.Constants;
 import com.autoroute.api.overpass.Box;
 import com.autoroute.api.overpass.Node;
 import com.autoroute.api.overpass.OverPassAPI;
-import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.Tag;
 import org.junit.jupiter.api.Assertions;
@@ -21,7 +19,7 @@ class OverPassAPITest {
     @Test
     @Timeout(value = 5, unit = TimeUnit.MINUTES)
     void getThreeNodesInSosnoviyBor() {
-        var api = new OverPassAPI();
+        var api = new OverPassAPI(new LatLon(59.369783, 28.577752), 200);
         final Box box = new Box(59.369783, 28.577752, 59.982578, 29.842246);
 
         final Set<Tag> tags = Set.of(new Tag("historic", "castle"), new Tag("historic", "cannon"));

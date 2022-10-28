@@ -1,13 +1,9 @@
 package com.autoroute;
 
-import com.autoroute.api.overpass.Box;
-import com.autoroute.api.overpass.OverPassAPI;
 import com.autoroute.logistic.PointVisiter;
 import com.autoroute.logistic.RouteDistanceAlgorithm;
 import com.autoroute.logistic.rodes.Cycle;
 import com.autoroute.osm.LatLon;
-import com.autoroute.osm.Tag;
-import com.autoroute.osm.WayPoint;
 import com.autoroute.osm.tags.TagsFileReader;
 import com.autoroute.telegram.Bot;
 import com.autoroute.telegram.db.Database;
@@ -17,15 +13,11 @@ import com.autoroute.telegram.db.State;
 import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 
 public class Main {
@@ -66,10 +58,10 @@ public class Main {
         final String user = String.valueOf(dbRow.id());
         var pointVisiter = new PointVisiter();
 
-        final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(user);
-
         final int minDistance = dbRow.minDistance();
         final int maxDistance = dbRow.maxDistance();
+        final RouteDistanceAlgorithm routeDistanceAlgorithm = new RouteDistanceAlgorithm(startPoint, maxDistance, user);
+
         var routes = routeDistanceAlgorithm.buildRoutes(startPoint,
             minDistance, maxDistance, pointVisiter, 5);
         final long chatId = dbRow.chatId();
@@ -129,62 +121,5 @@ public class Main {
         } finally {
             LOGGER.info("Finished main");
         }
-    }
-
-    @NotNull
-    private static List<WayPoint> readNodes(LatLon startPoint, TagsFileReader tagsReader, Row readyRow) {
-        double diffDegree = ((double) readyRow.maxDistance() / Constants.KM_IN_ONE_DEGREE) / 2;
-        final Box box = new Box(
-            startPoint.lat() - diffDegree,
-            startPoint.lon() - diffDegree,
-            startPoint.lat() + diffDegree,
-            startPoint.lon() + diffDegree
-        );
-
-        var overPassAPI = new OverPassAPI();
-        final var overpassResponse = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
-
-        List<WayPoint> wayPoints = new ArrayList<>();
-
-        Map<Tag, Integer> tagToCounterStats = new HashMap<>();
-        StringBuilder debugQuireByIds = new StringBuilder("[out:json][timeout:120];\n");
-        debugQuireByIds.append("(");
-        for (var node : overpassResponse.getNodes()) {
-            var tags = node.tags();
-            // filter only drinking water
-            if (tags.containsKey("natural")) {
-                if ("spring".equals(tags.get("natural"))) {
-                    boolean is_drinking =
-                        tags.containsKey("drinking_water") && "yes".equals(tags.get("drinking_water"));
-                    if (!is_drinking) {
-                        continue;
-                    }
-                }
-            }
-            debugQuireByIds.append("node(").append(node.id()).append(");");
-            wayPoints.add(new WayPoint(node.id(), node.latLon(), node.getName()));
-
-
-            for (Map.Entry<String, String> entry : tags.entrySet()) {
-                Tag tag = new Tag(entry.getKey(), entry.getValue());
-                if (tagsReader.getTags().contains(tag)) {
-                    tagToCounterStats.compute(tag, (k, v) -> {
-                        if (v == null) {
-                            return 1;
-                        } else {
-                            return v + 1;
-                        }
-                    });
-                }
-            }
-        }
-        debugQuireByIds.append(");\nout;");
-        LOGGER.info("----------------------------");
-        LOGGER.info("----------------------------");
-        LOGGER.info("debugQuireByIds:\n{}", debugQuireByIds);
-        LOGGER.info("found: {} nodes", wayPoints.size());
-        LOGGER.info("Print Tags sorted by popularity");
-        tagToCounterStats.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(LOGGER::info);
-        return wayPoints;
     }
 }

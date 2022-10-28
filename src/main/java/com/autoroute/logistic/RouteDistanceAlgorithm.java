@@ -56,10 +56,10 @@ public class RouteDistanceAlgorithm {
     private final OverPassAPI overPassAPI;
     private final String user; // TODO: delete this field and move logic inside PointVisitor
 
-    public RouteDistanceAlgorithm(String user) {
+    public RouteDistanceAlgorithm(LatLon start, int maxDistanceKM, String user) {
         this.user = user;
         this.osrmAPI = new OsrmAPI();
-        this.overPassAPI = new OverPassAPI();
+        this.overPassAPI = new OverPassAPI(start, maxDistanceKM);
     }
 
     public List<Route> buildRoutes(LatLon start,
@@ -69,7 +69,7 @@ public class RouteDistanceAlgorithm {
                                    int threads) {
         LOGGER.info("Start buildRoute");
         final OverpassResponse rodes =
-            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistanceKM * 1000);
+            overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistanceKM * 1000 / 2);
 
         // for fast testing only
 //         Utils.writeVertecesToFile(rodes);
@@ -135,9 +135,7 @@ public class RouteDistanceAlgorithm {
         var startVertexCompactGraph = compactGraph.findNearestVertex(start);
         assert startVertexFullGraph.getIdentificator() == startVertexCompactGraph.getIdentificator();
         compactGraph.calculateSuperVertices();
-        var routes =
-            generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
-        return routes;
+        return generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
     }
 
     private List<Sight> getSights(Future<OverpassResponse> nodesFuture, LatLon start, int maxDistance) {
@@ -151,16 +149,19 @@ public class RouteDistanceAlgorithm {
         }
         LOGGER.info("found: {} original sights", overpassResponse.getNodes().size());
         if (overpassResponse.getNodes().isEmpty()) {
-            LOGGER.info("didn't find any sights, try one time more");
-            nodesFuture = getNodesAsync(start, maxDistance);
-            try {
-                overpassResponse = nodesFuture.get();
-            } catch (InterruptedException | ExecutionException e) {
-                LOGGER.warn("exception in getting nodes", e);
-                return Collections.emptyList();
+            for (int i = 0; i < 5; i++) {
+                LOGGER.info("didn't find any sights, try again: {}", i);
+                nodesFuture = getNodesAsync(start, maxDistance);
+                try {
+                    overpassResponse = nodesFuture.get();
+                } catch (InterruptedException | ExecutionException e) {
+                    LOGGER.warn("exception in getting nodes", e);
+                }
+                if (!overpassResponse.getNodes().isEmpty()) {
+                    break;
+                }
             }
         }
-        assert overpassResponse != null;
         var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes());
         sights.sort(Comparator.comparingInt(Sight::rating).reversed());
         LOGGER.info("found: {} sorted sights", overpassResponse.getNodes().size());
@@ -174,8 +175,7 @@ public class RouteDistanceAlgorithm {
     }
 
     @NotNull
-    private static Future<OverpassResponse> getNodesAsync(LatLon start, int maxDistance) {
-        var overPassAPI = new OverPassAPI();
+    private Future<OverpassResponse> getNodesAsync(LatLon start, int maxDistance) {
         var tagsReader = new TagsFileReader();
         tagsReader.readTags();
         double diffDegree = ((double) maxDistance / Constants.KM_IN_ONE_DEGREE) / 2;
