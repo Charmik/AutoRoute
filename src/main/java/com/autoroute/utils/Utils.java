@@ -124,7 +124,7 @@ public class Utils {
             double lat = Double.parseDouble(strs[1]);
             double lon = Double.parseDouble(strs[2]);
             var latlon = new LatLon(lat, lon);
-            r.add(new Node(id, Collections.emptyMap(), latlon));
+            r.add(new Node(id, new String[0], new String[0], latlon));
         }
 
         int waysCount = Integer.parseInt(lines.get(nodesCount + 1));

@@ -22,7 +22,7 @@ public class Vertex {
         this.id = id;
         this.identificator = identificator;
         this.latLon = latLon;
-        this.neighbors = new ArrayList<>();
+        this.neighbors = new ArrayList<>(0);
         this.distances = null;
     }
 
@@ -32,6 +32,7 @@ public class Vertex {
         this.latLon = old.latLon;
         this.neighbors = old.neighbors;
         this.superVertex = old.superVertex;
+        this.distances = null;
     }
 
     public void calculateDistance() {
@@ -94,7 +95,6 @@ public class Vertex {
         return superVertex;
     }
 
-    // TODO: draw a graph of super vertexes
     public void setSuperVertex() {
         this.superVertex = true;
     }

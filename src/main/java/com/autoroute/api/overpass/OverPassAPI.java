@@ -103,7 +103,12 @@ public class OverPassAPI {
             @Override
             public void handle(de.westnordost.osmapi.map.data.Node node) {
                 var position = node.getPosition();
-                var n = new Node(node.getId(), node.getTags(),
+
+                final Map<String, String> tags = node.getTags();
+                String[] keys = new String[tags.size()];
+                String[] values = new String[tags.size()];
+                mapTagsToArrays(tags, keys, values);
+                var n = new Node(node.getId(), keys, values,
                     new com.autoroute.osm.LatLon(position.getLatitude(), position.getLongitude()));
                 response.add(n);
             }
@@ -116,12 +121,7 @@ public class OverPassAPI {
                 final Map<String, String> tags = way.getTags();
                 String[] keys = new String[tags.size()];
                 String[] values = new String[tags.size()];
-                int i = 0;
-                for (Map.Entry<String, String> e : tags.entrySet()) {
-                    keys[i] = HMInterner.INTERNER.intern(e.getKey());
-                    values[i] = HMInterner.INTERNER.intern(e.getValue());
-                    i++;
-                }
+                mapTagsToArrays(tags, keys, values);
                 var w = new com.autoroute.api.overpass.Way(way.getId(), nodes, keys, values);
                 response.add(w);
             }
@@ -149,6 +149,15 @@ public class OverPassAPI {
             .backoff(Duration.FIVE_SECONDS, 2, Duration.seconds(30))
             .run();
         return response;
+    }
+
+    private static void mapTagsToArrays(Map<String, String> tags, String[] keys, String[] values) {
+        int i = 0;
+        for (Map.Entry<String, String> e : tags.entrySet()) {
+            keys[i] = HMInterner.INTERNER.intern(e.getKey());
+            values[i] = HMInterner.INTERNER.intern(e.getValue());
+            i++;
+        }
     }
 
     @NotNull

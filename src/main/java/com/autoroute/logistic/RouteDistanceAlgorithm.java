@@ -121,13 +121,14 @@ public class RouteDistanceAlgorithm {
     @NotNull
     private static List<List<Vertex>> generateRoutes(OverpassResponse rodes, LatLon start, int minDistance, int maxDistance, Graph fullGraph) {
         final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
+        Graph compactGraph = GraphBuilder.buildGraph(rodes, start,
+            startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
+
         var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
         fullGraph.calculateDistanceForNeighbours();
         dijkstra.run();
         fullGraph.buildIdentificatorToVertexMap();
 
-        Graph compactGraph = GraphBuilder.buildGraph(rodes, start,
-            startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
         compactGraph.setFullGraph(fullGraph);
         compactGraph.calculateDistanceForNeighbours();
 

@@ -3,13 +3,24 @@ package com.autoroute.api.overpass;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.Tag;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public record Node(long id, Map<String, String> tags, LatLon latLon) {
+public record Node(long id, String[] keys, String[] values, LatLon latLon) {
+
+    public Map<String, String> tags() {
+        Map<String, String> m = new HashMap<>();
+        assert keys.length == values.length;
+        for (int i = 0; i < keys.length; i++) {
+            m.put(keys[i], values[i]);
+        }
+        return m;
+    }
 
     public String getName() {
+        var tags = tags(); // TODO: iterate over arrays
         if (tags.containsKey("name:en")) {
             return tags.get("name:en");
         }
@@ -27,7 +38,7 @@ public record Node(long id, Map<String, String> tags, LatLon latLon) {
     }
 
     public Set<Tag> getTags() {
-        return tags.entrySet()
+        return tags().entrySet()
             .stream()
             .map(e -> new Tag(e.getKey(), e.getValue()))
             .collect(Collectors.toSet());
@@ -53,7 +64,8 @@ public record Node(long id, Map<String, String> tags, LatLon latLon) {
         return "Node{" +
             "id=" + id +
             "name=" + getName() +
-            ", tags=" + tags +
+            ", keys=" + keys +
+            ", values=" + values +
             ", latLon=" + latLon +
             '}';
     }
