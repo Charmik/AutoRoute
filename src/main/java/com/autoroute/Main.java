@@ -30,19 +30,21 @@ public class Main {
         final Database db = new Database(sqlSettings);
         Bot telegramBot = Bot.startBot(db);
 
+        int count = 0;
         for (; ; ) {
             try {
-                var tagsReader = new TagsFileReader();
-                tagsReader.readTags();
-
-                // TODO: sort by datetime
                 final List<Row> readyRows = db.getRowsByStateSortedByDate(State.SENT_DISTANCE);
-                LOGGER.info("found: {} rows from db", readyRows.size());
+                if (!readyRows.isEmpty()) {
+                    LOGGER.info("found: {} rows from db", readyRows.size());
+                }
                 for (Row dbRow : readyRows) {
-                    handleRouteRequest(db, telegramBot, tagsReader, dbRow);
+                    handleRouteRequest(db, telegramBot, dbRow);
                 }
                 if (readyRows.isEmpty()) {
-                    LOGGER.info("didn't find any rows in db, sleeping...");
+                    if (count % 1000 == 0) {
+                        LOGGER.info("didn't find any rows in db, sleeping...");
+                    }
+                    count++;
                     Thread.sleep(10 * 1000);
                 }
             } catch (Throwable t) {
@@ -51,7 +53,7 @@ public class Main {
         }
     }
 
-    private static void handleRouteRequest(Database db, Bot telegramBot, TagsFileReader tagsReader, Row dbRow) throws IOException {
+    private static void handleRouteRequest(Database db, Bot telegramBot, Row dbRow) throws IOException {
         LOGGER.info("got a row: {}", dbRow);
         final LatLon startPoint = dbRow.startPoint();
 
@@ -90,7 +92,7 @@ public class Main {
         telegramBot.sendMessage(chatId,
             "Your routes are ready! You can use this site to look at your route: https://gpx.studio/.\n" +
                 "You need to download generated .gpx file and load it on the site: Load GPX.");
-        // telegramBot.sendFile(chatId, gpxPath);
+        LOGGER.info("processed request");
     }
 
     private Settings readSqlSettings() {

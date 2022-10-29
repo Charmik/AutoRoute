@@ -19,6 +19,7 @@ import com.autoroute.osm.WayPoint;
 import com.autoroute.osm.tags.SightMapper;
 import com.autoroute.osm.tags.TagsFileReader;
 import com.autoroute.sight.Sight;
+import com.autoroute.sight.SightAdder;
 import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -29,10 +30,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -93,14 +92,14 @@ public class RouteDistanceAlgorithm {
 
         final Graph fullGraph = GraphBuilder.buildFullGraph(rodes, start, minDistance, maxDistance);
         LOGGER.info("Start generateRoutes");
-        List<List<Vertex>> routes = generateRoutes(rodes, start, minDistance, maxDistance, fullGraph);
+        List<Route> routes = generateRoutes(rodes, start, minDistance, maxDistance, fullGraph);
 
         var goodSights = getSights(nodesFuture, start, maxDistance);
 
         List<Route> routesWithSights = new ArrayList<>();
         for (int i = 0; i < routes.size(); i++) {
             var vertices = routes.get(i);
-            final Route newRoute = addSights(vertices, goodSights, fullGraph);
+            final Route newRoute = SightAdder.addSights(vertices, goodSights, fullGraph);
             if (!newRoute.sights().isEmpty()) {
                 routesWithSights.add(newRoute);
             }
@@ -119,7 +118,7 @@ public class RouteDistanceAlgorithm {
     }
 
     @NotNull
-    private static List<List<Vertex>> generateRoutes(OverpassResponse rodes, LatLon start, int minDistance, int maxDistance, Graph fullGraph) {
+    private static List<Route> generateRoutes(OverpassResponse rodes, LatLon start, int minDistance, int maxDistance, Graph fullGraph) {
         final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
         Graph compactGraph = GraphBuilder.buildGraph(rodes, start,
             startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
@@ -188,43 +187,10 @@ public class RouteDistanceAlgorithm {
         return OSM_POOL.submit(() -> overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags()));
     }
 
-    private Route addSights(List<Vertex> route, List<Sight> sights, Graph fullGraph) {
-        Set<Sight> sightsInRoute = new HashSet<>();
-        int i = 0;
-        while (i < route.size()) {
-            // TODO: use distance of route here
-            if (sightsInRoute.size() > 15) {
-                break;
-            }
-            var v = route.get(i);
-            for (Sight sight : sights) {
-                if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.2 && !sightsInRoute.contains(sight)) {
-                    final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
-                    final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
-                    var dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
-                    dijkstra.run(sightVertex);
-                    final List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
-                    final ArrayList<Vertex> reversedPath = new ArrayList<>(routeFromVToSight);
-                    Collections.reverse(reversedPath);
-                    routeFromVToSight.addAll(reversedPath);
-                    // TODO: check that distance < maxDistance
-                    // TODO: need to check if i + 1 bigger than route.size() ?
-                    route.addAll(i + 1, routeFromVToSight);
-                    sightsInRoute.add(sight);
-                    // sights.remove(sight);
-                    i += routeFromVToSight.size();
-                    break;
-                }
-            }
-            i++;
-        }
-        return new Route(route, sightsInRoute);
-    }
-
     // TODO: make parallel, 1 dfs for every thread. duplicates in merge-thread once again?
-    private static List<List<Vertex>> generateRoutesFromGraph(Graph g,
-                                                              Vertex startVertex,
-                                                              DijkstraAlgorithm dijkstra) {
+    private static List<Route> generateRoutesFromGraph(Graph g,
+                                                       Vertex startVertex,
+                                                       DijkstraAlgorithm dijkstra) {
         LOGGER.info("Final graph has: {} vertices", g.getVertices().size());
 
         int tries = 0;
@@ -232,7 +198,7 @@ public class RouteDistanceAlgorithm {
         g.calculateDistanceForNeighbours();
         g.buildIdentificatorToVertexMap();
         int newSize;
-        List<List<Vertex>> routes = new ArrayList<>();
+        List<Route> routes = new ArrayList<>();
 
         final DijkstraCache dijkstraCache = new DijkstraCache();
         long lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
@@ -273,7 +239,7 @@ public class RouteDistanceAlgorithm {
                     // TODO: try to find another way back home if possible if not - take the same way.
                     Collections.reverse(routeToCycle);
                     fullRoute.addAll(routeToCycle);
-                    routes.add(fullRoute);
+                    routes.add(new Route(fullRoute));
                     // TODO: put distance in Route class which we return
                     Utils.writeDebugGPX(fullRoute, "routes/" + i + "_" + (int) Cycle.getCycleDistanceSlow(fullRoute));
                     lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
