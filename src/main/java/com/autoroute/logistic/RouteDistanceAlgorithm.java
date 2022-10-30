@@ -107,6 +107,9 @@ public class RouteDistanceAlgorithm {
         }
         LOGGER.info("found: {} routes with good sights", routesWithSights.size());
 
+
+        // TODO: sort routes by rating
+
         int routeCount = 0;
         for (Route route : routesWithSights) {
             routeCount++;
@@ -149,7 +152,7 @@ public class RouteDistanceAlgorithm {
         LOGGER.info("found: {} original sights", overpassResponse.getNodes().size());
         if (overpassResponse.getNodes().isEmpty()) {
             for (int i = 0; i < 5; i++) {
-                LOGGER.info("didn't find any sights, try again: {}", i);
+                LOGGER.warn("didn't find any sights, try again: {}", i);
                 nodesFuture = getNodesAsync(start, maxDistance);
                 try {
                     overpassResponse = nodesFuture.get();

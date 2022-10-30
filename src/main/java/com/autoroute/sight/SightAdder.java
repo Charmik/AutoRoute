@@ -38,12 +38,13 @@ public class SightAdder {
 
                     boolean addToPath = true;
                     for (int j = 2; j < routeFromVToSight.size() - 2; j++) {
-                        var v1 = routeFromVToSight.get(j);
-                        var v2 = routeFromVToSight.get(j + 1);
-                        var v3 = routeFromVToSight.get(j + 2);
-                        final double angle = LatLon.angle(v1.getLatLon(), v2.getLatLon(), v3.getLatLon());
-                        if (Math.abs(angle) > 1) {
-                            LOGGER.info("have angle: {}", angle);
+                        var v1 = routeFromVToSight.get(j).getLatLon();
+                        var v2 = routeFromVToSight.get(j + 1).getLatLon();
+                        var v3 = routeFromVToSight.get(j + 2).getLatLon();
+                        final double angle = LatLon.angle(v1, v2, v3);
+                        final double angleAbs = Math.abs(angle);
+                        if (angleAbs > 1) {
+                            LOGGER.info("have angle: {} {} {} {}", angle, v1, v2, v3);
                             addToPath = false;
                             break;
                         }
