@@ -218,6 +218,7 @@ public class Bot extends TelegramLongPollingBot {
         for (int retry = 0; retry < SEND_RETRIES; retry++) {
             try {
                 execute(message);
+                telegramSentMessage.set(true);
                 return;
             } catch (TelegramApiException e) {
                 ex = new RuntimeException(e);
@@ -238,6 +239,7 @@ public class Bot extends TelegramLongPollingBot {
         for (int retry = 0; retry < SEND_RETRIES; retry++) {
             try {
                 execute(message);
+                telegramSentMessage.set(true);
                 return;
             } catch (TelegramApiException e) {
                 ex = new RuntimeException(e);
@@ -258,6 +260,7 @@ public class Bot extends TelegramLongPollingBot {
         for (int retry = 0; retry < SEND_RETRIES; retry++) {
             try {
                 execute(message);
+                telegramSentMessage.set(true);
                 return;
             } catch (TelegramApiException e) {
                 ex = new RuntimeException(e);
