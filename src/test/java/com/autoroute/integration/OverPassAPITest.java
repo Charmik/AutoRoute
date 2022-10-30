@@ -26,9 +26,6 @@ class OverPassAPITest {
         final var overpassResponse = api.getNodesInBoxByTags(box, tags);
 
         final List<Node> nodes = overpassResponse.getNodes();
-        for (Node node : nodes) {
-            System.out.println(node);
-        }
 
         Assertions.assertEquals(2, nodes.size());
         var sortedByName = nodes.stream()
