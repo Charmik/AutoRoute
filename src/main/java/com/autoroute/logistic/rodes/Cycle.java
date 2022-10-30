@@ -38,11 +38,10 @@ public class Cycle {
         double routeDistance = distanceToCycle * 2 + cycleDistance;
         final int superVertexes = countSuperVertexes();
 
-        if (1 == 1
-            // distance will be increased by full graph
-            && isGoodDistance(cycleDistance, distanceToCycle, minKM * 0.7, maxKM * 0.8)
+        // distance will be increased by full graph
+        if (isGoodDistance(cycleDistance, distanceToCycle, minKM * 0.7, maxKM * 0.8)
             && !isInCity(superVertexes)
-            && vertices.size() > 50
+            && size() > 50
             // TODO: && don't cross yourself
         ) {
             // To be sure that Start vertex is not changed.
@@ -54,7 +53,7 @@ public class Cycle {
             }
             assertFirstAndEndCycle();
             removeExternalCycles(cycleDistance);
-            if (isInCity(countSuperVertexes())) {
+            if (isInCity(countSuperVertexes()) || size() < 50) {
                 return false;
             }
             var duplicateVertices = new ArrayList<>(vertices);
