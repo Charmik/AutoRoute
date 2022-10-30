@@ -322,23 +322,6 @@ public class Graph {
 //        } while (progress);
     }
 
-    private boolean checkDistance(double distance, boolean[] remove, boolean[] visit, int i, int j) {
-        var v1 = vertices.get(i);
-        var v2 = vertices.get(j);
-        final double distBetween = LatLon.distanceKM(v1.getLatLon(), v2.getLatLon());
-        if (!remove[i] &&
-            !remove[j] &&
-            !visit[i] &&
-            !visit[j]) {
-            if (distBetween < distance) {
-                visit[i] = visit[j] = true;
-                remove[i] = true;
-                return true;
-            }
-        }
-        return false;
-    }
-
     public void calculateSuperVertices() {
         superVertices = vertices.stream()
             .filter(Vertex::isSuperVertex)
@@ -347,11 +330,6 @@ public class Graph {
 
     public List<Vertex> getVertices() {
         return vertices;
-    }
-
-    public List<Vertex> getSuperVertices() {
-        assert superVertices != null;
-        return superVertices;
     }
 
     public void buildIdentificatorToVertexMap() {

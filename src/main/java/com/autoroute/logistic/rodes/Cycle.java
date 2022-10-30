@@ -282,29 +282,6 @@ public class Cycle {
         return minDistance;
     }
 
-    public Cycle buildShortCycle() {
-        List<Vertex> shortCycle = new ArrayList<>(vertices);
-
-        final int minVertexes = 95;
-        while (shortCycle.size() > minVertexes) {
-            var it = shortCycle.iterator();
-            while (it.hasNext() && shortCycle.size() > minVertexes) {
-                it.next();
-                if (it.hasNext()) {
-                    it.next();
-                    it.remove();
-                }
-            }
-        }
-        return new Cycle(shortCycle);
-    }
-
-    public Cycle getReversedVertices() {
-        List<Vertex> reverseCycle = new ArrayList<>(vertices);
-        Collections.reverse(reverseCycle);
-        return new Cycle(reverseCycle);
-    }
-
     public static double getCycleDistance(List<Vertex> list) {
         assert list.size() > 2;
         double distCycle = 0;
@@ -330,19 +307,6 @@ public class Cycle {
     public int countSuperVertexes() {
         int superVertexes = 0;
         for (int j = 0; j < vertices.size(); j++) {
-            final Vertex v = vertices.get(j);
-            if (v.isSuperVertex()) {
-                superVertexes++;
-            }
-        }
-        return superVertexes;
-    }
-
-    public int countSuperVertexesWithoutEnds() {
-        int superVertexes = 0;
-        int startIndex = (int) (((double) vertices.size()) / 100 * 20);
-        int finishIndex = (int) (((double) vertices.size()) / 100 * 80);
-        for (int j = startIndex; j < finishIndex; j++) {
             final Vertex v = vertices.get(j);
             if (v.isSuperVertex()) {
                 superVertexes++;
@@ -382,87 +346,17 @@ public class Cycle {
         }
     }
 
-    public int size() {
-        return vertices.size();
-    }
-
-    public boolean isGood() {
-
-//        double angles = 0;
-//        int count1 = 0;
-//        int count2 = 0;
-//        double a1 = 0;
-//        double a2 = 0;
-//        for (int i = 0; i < vertices.size() - 3; i++) {
-//            final LatLon p1 = vertices.get(i).getLatLon();
-//            final LatLon p2 = vertices.get(i + 1).getLatLon();
-//            final LatLon p3 = vertices.get(i + 2).getLatLon();
-//            double angle =
-//                LatLon.angle(p1, p2, p3);
-//            angles += angle;
-//            if (angle > 0) {
-//                count1++;
-//                a1 += angle;
-//            } else {
-//                count2++;
-//                a2 += angle;
-//            }
-//        }
-//
-//        double realSum = (vertices.size() - 2) * Math.PI;
-//        LOGGER.info("graph with angles: {}", angles);
-//        LOGGER.info("graph with count1: {}, count2: {}", count1, count2);
-//        LOGGER.info("graph with a1: {}, a2: {}", a1, a2);
-//        if (angles < realSum) {
-//            return true;
-//        }
-//        return false;
-
-//        var points = vertices.stream()
-//            .map(Vertex::getLatLon)
-//            .toList();
-//        int diff = points.size() / 10;
-//
-//        int startIndex = (int) (((double) points.size()) / 100 * 5);
-//        int finishIndex = (int) (((double) points.size()) / 100 * 95);
-//        assert finishIndex > 1;
-//        assert finishIndex < points.size();
-//        int count = 0;
-//        for (int i = startIndex; i <= finishIndex; i++) {
-//            for (int j = i + diff; j <= finishIndex; j++) {
-//                final LatLon point1 = points.get(i);
-//                final LatLon point2 = points.get(j);
-//                if (point1.isClosePoint(point2)) {
-//                    count++;
-//                    break;
-//                }
-//            }
-//        }
-//        LOGGER.info("graph has count: {} size: {}", count, points.size());
-
-        return true;
-    }
-
-    public boolean hasAnInternalCycle() {
-        int startIndex = (int) (((double) vertices.size()) / 100 * 10);
-        int finishIndex = (int) (((double) vertices.size()) / 100 * 90);
-
-        int count = 0;
-        int eliminate_points = 300;
-        for (int i = startIndex; i <= finishIndex; i++) {
-            for (int j = i + eliminate_points; j <= finishIndex; j++) {
-                if (vertices.get(i).getLatLon().isCloseInCity(vertices.get(j).getLatLon(), 0.1)) {
-                    count++;
-                    break;
-                }
+    boolean containsLatLon(LatLon latLon, double distance) {
+        for (Vertex v : vertices) {
+            if (LatLon.distanceKM(v.getLatLon(), latLon) < distance) {
+                return true;
             }
         }
-        LOGGER.info("found: {} similar points from: {}", count, finishIndex - startIndex);
-        // 10% of the route can go back
-        if (count > (finishIndex - startIndex - eliminate_points) / 100 * 10) {
-            return true;
-        }
         return false;
+    }
+
+    public int size() {
+        return vertices.size();
     }
 
     public List<Vertex> getVertices() {

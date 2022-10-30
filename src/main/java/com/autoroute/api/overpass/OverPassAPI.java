@@ -127,12 +127,7 @@ public class OverPassAPI {
             public void handle(Way way) {
                 final List<Long> nodesList = way.getNodeIds();
                 long[] nodes = nodesList.stream().mapToLong(i -> i).toArray();
-
-                final Map<String, String> tags = way.getTags();
-                String[] keys = new String[tags.size()];
-                String[] values = new String[tags.size()];
-                mapTagsToArrays(tags, keys, values);
-                var w = new com.autoroute.api.overpass.Way(way.getId(), nodes, keys, values);
+                var w = new com.autoroute.api.overpass.Way(way.getId(), nodes);
                 response.add(w);
             }
 

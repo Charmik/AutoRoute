@@ -43,7 +43,8 @@ public class SightAdder {
                         var v3 = routeFromVToSight.get(j + 2).getLatLon();
                         final double angle = LatLon.angle(v1, v2, v3);
                         final double angleAbs = Math.abs(angle);
-                        if (angleAbs > 1) {
+                        if (angleAbs < 1 || Math.abs(angleAbs - Math.PI * 2) < 1) {
+                        } else {
                             LOGGER.info("have angle: {} {} {} {}", angle, v1, v2, v3);
                             addToPath = false;
                             break;
@@ -68,9 +69,4 @@ public class SightAdder {
         }
         return new Route(route.route(), sightsInRoute);
     }
-
-    public static void tryAddSight(Route route, Sight sights, Graph fullGraph) {
-
-    }
-
 }

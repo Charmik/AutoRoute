@@ -24,10 +24,6 @@ public record Row(@Nullable Long id, long chatId, @Nullable String userName, lon
         this(chatId, userName, date, empty, null);
     }
 
-    public Row(Row old, State state) {
-        this(old.chatId, old.userName, old.date, state, old.startPoint, old.minDistance, old.maxDistance);
-    }
-
     public Row withState(State s) {
         return new Row(id, chatId, userName, date, s, startPoint, minDistance, maxDistance);
     }

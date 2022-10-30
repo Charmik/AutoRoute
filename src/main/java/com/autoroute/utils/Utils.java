@@ -136,7 +136,7 @@ public class Utils {
             for (int j = 1; j < strs.length; j++) {
                 ids[j - 1] = Long.parseLong(strs[j]);
             }
-            final Way way = new Way(id, ids, new String[0], new String[0]);
+            final Way way = new Way(id, ids);
             r.add(way);
         }
         assert r.getWays().size() == waysCount;
