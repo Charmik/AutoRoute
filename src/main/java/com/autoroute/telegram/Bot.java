@@ -29,6 +29,7 @@ import java.nio.file.Paths;
 public class Bot extends TelegramLongPollingBot {
 
     private static final Logger LOGGER = LogManager.getLogger(Bot.class);
+    private static final int SEND_RETRIES = 5;
     private static final String TELEGRAM_KEY;
 
     private static final String SEND_LOCATION_MESSAGE = """
@@ -212,34 +213,60 @@ public class Bot extends TelegramLongPollingBot {
         message.setChatId(chatId);
         message.setText(strMessage);
         message.disableWebPagePreview();
-        try {
-            execute(message);
-            telegramSentMessage.set(true);
-        } catch (TelegramApiException e) {
-            throw new RuntimeException(e);
+
+        RuntimeException ex = null;
+        for (int retry = 0; retry < SEND_RETRIES; retry++) {
+            try {
+                execute(message);
+                return;
+            } catch (TelegramApiException e) {
+                ex = new RuntimeException(e);
+                Utils.sleep(5000);
+                LOGGER.warn("couldn't send message to telegram, wait and try again, tries: {}", retry);
+            }
         }
+        assert ex != null;
+        throw ex;
     }
 
     public void sendFile(long chatId, Path file) {
         SendDocument message = new SendDocument();
         message.setChatId(chatId);
         message.setDocument(new InputFile(file.toFile()));
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            throw new RuntimeException(e);
+
+        RuntimeException ex = null;
+        for (int retry = 0; retry < SEND_RETRIES; retry++) {
+            try {
+                execute(message);
+                return;
+            } catch (TelegramApiException e) {
+                ex = new RuntimeException(e);
+                Utils.sleep(5000);
+                LOGGER.warn("couldn't send file to telegram, wait and try again, tries: {}", retry);
+            }
         }
+        assert ex != null;
+        throw ex;
     }
 
     public void sendPhoto(long chatId, Path file) {
         SendPhoto message = new SendPhoto();
         message.setChatId(chatId);
         message.setPhoto(new InputFile(file.toFile()));
-        try {
-            execute(message);
-        } catch (TelegramApiException e) {
-            throw new RuntimeException(e);
+
+        RuntimeException ex = null;
+        for (int retry = 0; retry < SEND_RETRIES; retry++) {
+            try {
+                execute(message);
+                return;
+            } catch (TelegramApiException e) {
+                ex = new RuntimeException(e);
+                Utils.sleep(5000);
+                LOGGER.warn("couldn't send photo to telegram, wait and try again, tries: {}", retry);
+            }
         }
+        assert ex != null;
+        throw ex;
     }
 
     public static Bot startBot(Database db) {
