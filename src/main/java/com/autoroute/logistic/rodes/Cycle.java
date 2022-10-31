@@ -248,7 +248,7 @@ public class Cycle {
 
     private static boolean isCycleInsideBox(List<Vertex> vertices, List<LatLon> list, double percent) {
         assert list.size() == 4;
-        double EPS = 0.01;
+        double EPS = 0.001;
         double minX = list.get(0).lat() - EPS;
         double minY = list.get(1).lon() - EPS;
         double maxX = list.get(2).lat() + EPS;
