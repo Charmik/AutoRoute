@@ -1,5 +1,6 @@
 package com.autoroute.logistic.rodes;
 
+import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
@@ -176,17 +177,7 @@ public class Graph {
     }
 
     public Vertex findNearestVertex(LatLon latLon) {
-        Vertex minV = vertices.get(0);
-        double minD = LatLon.distanceKM(latLon, vertices.get(0).getLatLon());
-        for (int i = 1; i < vertices.size(); i++) {
-            var v = vertices.get(i);
-            var d = LatLon.distanceKM(latLon, v.getLatLon());
-            if (d < minD) {
-                minV = v;
-                minD = d;
-            }
-        }
-        return minV;
+        return LogisticUtils.findNearestVertex(latLon, vertices);
     }
 
     public void removeEdges(long identificatorStartVertex) {
@@ -450,14 +441,6 @@ public class Graph {
             }
             deleteVerticesFromGraph(closeVertexes);
         }
-    }
-
-    public void removeLongAwayVertices(Vertex startVertex, int kmDistance) {
-        var deleteVertices = vertices.stream()
-            .filter(v -> LatLon.distanceKM(v.getLatLon(), startVertex.getLatLon()) > kmDistance)
-            .collect(Collectors.toUnmodifiableSet());
-        assert !deleteVertices.contains(startVertex);
-        deleteVerticesFromGraph(deleteVertices);
     }
 
     private void deleteVerticesFromGraph(Collection<Vertex> deleteVertices) {

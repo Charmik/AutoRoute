@@ -82,10 +82,6 @@ public class GraphBuilder {
 
     private static void generalPhases(Graph g, LatLon start, int maxDistanceKM, long identificatorStartVertex, double edgeDistance) {
         LOGGER.info("graph has: {} vertexes", g.size());
-        LOGGER.info("Start removeLongAwayVertices");
-        g.removeLongAwayVertices(getNearestVertex(g, start, identificatorStartVertex), maxDistanceKM / 2);
-        g.checkGraph(identificatorStartVertex);
-        LOGGER.info("graph2 has: {} vertices", g.getVertices().size());
 
         LOGGER.info("Start removeSingleEdgeVertexes");
         g.removeSingleEdgeVertexes(identificatorStartVertex);
