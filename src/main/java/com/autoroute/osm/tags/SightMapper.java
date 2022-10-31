@@ -10,6 +10,20 @@ import java.util.Set;
 
 public class SightMapper {
 
+    // TODO: iterate over TagsReader?
+    private static final List<String> NAME_TAGS = List.of(
+        "name:en",
+        "name",
+        "historic",
+        "leisure",
+        "amenity",
+        "building",
+        "natural",
+        "tourism",
+        "water",
+        "waterway"
+    );
+
     public static List<Sight> getSightsFromNodes(List<Node> nodes) {
         List<Sight> sights = new ArrayList<>(nodes.size());
         for (Node node : nodes) {
@@ -37,11 +51,11 @@ public class SightMapper {
 
     private static String getName(Node node) {
         var tags = node.tags();
-        if (tags.containsKey("name:en")) {
-            return tags.get("name:en");
-        }
-        if (tags.containsKey("name")) {
-            return tags.get("name");
+        for (String keyTag : NAME_TAGS) {
+            final String value = tags.get(keyTag);
+            if (value != null) {
+                return value;
+            }
         }
         return null;
     }
