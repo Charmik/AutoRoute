@@ -1,5 +1,6 @@
 package com.autoroute.sight;
 
+import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.Route;
 import com.autoroute.logistic.rodes.Vertex;
@@ -20,52 +21,44 @@ public class SightAdder {
 
     public static Route addSights(Route route, List<Sight> sights, Graph fullGraph) {
         Set<Sight> sightsInRoute = new HashSet<>();
-        int i = 0;
-        while (i < route.size()) {
-            // TODO: use distance of route here
+        for (Sight sight : sights) {
             if (sightsInRoute.size() > 15) {
                 break;
             }
-            var v = route.route().get(i);
-            // TODO: we can fast sort by LatLon.fastDistance and then check only part of elements
-            for (Sight sight : sights) {
-                if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.2 && !sightsInRoute.contains(sight)) {
-                    final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
-                    final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
-                    var dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
-                    dijkstra.run(sightVertex);
-                    final List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
+            Vertex v = LogisticUtils.findNearestVertex(sight.latLon(), route.route());
+            if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.2 && !sightsInRoute.contains(sight)) {
+                final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
+                final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
+                var dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
+                dijkstra.run(sightVertex);
+                final List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
 
-                    boolean addToPath = true;
-                    for (int j = 2; j < routeFromVToSight.size() - 2; j++) {
-                        var v1 = routeFromVToSight.get(j).getLatLon();
-                        var v2 = routeFromVToSight.get(j + 1).getLatLon();
-                        var v3 = routeFromVToSight.get(j + 2).getLatLon();
-                        final double angle = LatLon.angle(v1, v2, v3);
-                        final double angleAbs = Math.abs(angle);
-                        if (angleAbs < 1 || Math.abs(angleAbs - Math.PI * 2) < 1) {
-                        } else {
-                            LOGGER.info("have angle: {} {} {} {}", angle, v1, v2, v3);
-                            addToPath = false;
-                            break;
-                        }
+                boolean addToPath = true;
+                for (int j = 2; j < routeFromVToSight.size() - 2; j++) {
+                    var v1 = routeFromVToSight.get(j).getLatLon();
+                    var v2 = routeFromVToSight.get(j + 1).getLatLon();
+                    var v3 = routeFromVToSight.get(j + 2).getLatLon();
+                    final double angle = LatLon.angle(v1, v2, v3);
+                    final double angleAbs = Math.abs(angle);
+                    if (angleAbs < 1 || Math.abs(angleAbs - Math.PI * 2) < 1) {
+                    } else {
+                        addToPath = false;
+                        break;
                     }
+                }
 
-                    if (addToPath) {
-                        final ArrayList<Vertex> reversedPath = new ArrayList<>(routeFromVToSight);
-                        Collections.reverse(reversedPath);
-                        routeFromVToSight.addAll(reversedPath);
-                        // TODO: check that distance < maxDistance
-                        // TODO: need to check if i + 1 bigger than route.size() ?
-                        route.route().addAll(i + 1, routeFromVToSight);
-                        i += routeFromVToSight.size();
-                    }
+                if (addToPath) {
+                    final ArrayList<Vertex> reversedPath = new ArrayList<>(routeFromVToSight);
+                    Collections.reverse(reversedPath);
+                    routeFromVToSight.addAll(reversedPath);
+                    // TODO: check that distance < maxDistance
+                    // TODO: need to check if i + 1 bigger than route.size() ?
+                    int index = route.getIndexByVertex(v);
+                    route.route().addAll(index + 1, routeFromVToSight);
                     sightsInRoute.add(sight);
                     // sights.remove(sight);
-                    break;
                 }
             }
-            i++;
         }
         return new Route(route.route(), sightsInRoute);
     }
