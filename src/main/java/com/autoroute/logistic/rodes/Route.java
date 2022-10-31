@@ -17,4 +17,12 @@ public record Route(List<Vertex> route, Set<Sight> sights) {
         return route.size();
     }
 
+    public int getIndexByVertex(Vertex v) {
+        for (int i = 0; i < route.size(); i++) {
+            if (route.get(i).getIdentificator() == v.getIdentificator()) {
+                return i;
+            }
+        }
+        throw new IllegalStateException();
+    }
 }
