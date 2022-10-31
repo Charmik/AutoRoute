@@ -21,4 +21,15 @@ public class LogisticUtils {
         return minV;
     }
 
+    public static double getCycleDistanceSlow(List<Vertex> list) {
+        assert list.size() >= 2;
+        double distCycle = 0;
+        for (int i = 1; i < list.size(); i++) {
+            final Vertex prevV = list.get(i - 1);
+            final Vertex nextV = list.get(i);
+            distCycle += LatLon.distanceKM(prevV.getLatLon(), nextV.getLatLon());
+        }
+        return distCycle;
+    }
+
 }

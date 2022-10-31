@@ -75,7 +75,7 @@ public class SightMapper {
         }
         boolean is_drinking = isDrinkingWater(tag);
         if (is_drinking) {
-            return 10;
+            return 5;
         }
         if ("historic".equals(tag.key())) {
             return 5;

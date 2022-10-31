@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -94,16 +95,28 @@ public class RouteDistanceAlgorithm {
             }
             LOGGER.info("processed: {}/{} routes with: {} sights", i, routes.size(), goodSights.size());
         }
+        // TODO: if 2 routes have the same sights - choose only 1 of them?
         LOGGER.info("found: {} routes with good sights", routesWithSights.size());
 
-
-        // TODO: sort routes by rating
+        routesWithSights.sort((r1, r2) -> {
+            final Set<Sight> s1 = r1.sights();
+            final Set<Sight> s2 = r2.sights();
+            int rating1 = 0;
+            for (Sight sight : s1) {
+                rating1 += sight.rating();
+            }
+            int rating2 = 0;
+            for (Sight sight : s2) {
+                rating2 += sight.rating();
+            }
+            return Integer.compare(rating2, rating1);
+        });
 
         int routeCount = 0;
         for (Route route : routesWithSights) {
             routeCount++;
             Utils.writeDebugGPX(route,
-                routeCount + "_" + (int) (Cycle.getCycleDistanceSlow(route.route())));
+                routeCount + "_" + (int) (LogisticUtils.getCycleDistanceSlow(route.route())));
         }
         LOGGER.info("were: {} routes, with sights found: {}", routes.size(), routesWithSights.size());
         return routesWithSights;
@@ -231,9 +244,11 @@ public class RouteDistanceAlgorithm {
                     // TODO: try to find another way back home if possible if not - take the same way.
                     Collections.reverse(routeToCycle);
                     fullRoute.addAll(routeToCycle);
-                    routes.add(new Route(fullRoute));
+                    final double routeDistance = LogisticUtils.getCycleDistanceSlow(fullRoute);
+                    routes.add(new Route(fullRoute, routeDistance));
                     // TODO: put distance in Route class which we return
-                    Utils.writeDebugGPX(fullRoute, "routes/" + i + "_" + (int) Cycle.getCycleDistanceSlow(fullRoute));
+
+                    Utils.writeDebugGPX(fullRoute, "routes/" + i + "_" + (int) routeDistance);
                     lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
                 }
                 tries = 0;

@@ -18,11 +18,13 @@ import java.util.Set;
 public class SightAdder {
 
     private static final Logger LOGGER = LogManager.getLogger(SightAdder.class);
+    private static final double SIGHTS_PER_KM = 0.1;
 
     public static Route addSights(Route route, List<Sight> sights, Graph fullGraph) {
         Set<Sight> sightsInRoute = new HashSet<>();
+        int maxSights = (int) (route.routeDistance() * SIGHTS_PER_KM);
         for (Sight sight : sights) {
-            if (sightsInRoute.size() > 15) {
+            if (sightsInRoute.size() > maxSights) {
                 break;
             }
             Vertex v = LogisticUtils.findNearestVertex(sight.latLon(), route.route());
@@ -60,6 +62,6 @@ public class SightAdder {
                 }
             }
         }
-        return new Route(route.route(), sightsInRoute);
+        return new Route(route.route(), sightsInRoute, LogisticUtils.getCycleDistanceSlow(route.route()));
     }
 }

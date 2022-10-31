@@ -1,5 +1,6 @@
 package com.autoroute.logistic.rodes;
 
+import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
@@ -293,17 +294,6 @@ public class Cycle {
         return distCycle;
     }
 
-    public static double getCycleDistanceSlow(List<Vertex> list) {
-        assert list.size() >= 2;
-        double distCycle = 0;
-        for (int i = 1; i < list.size(); i++) {
-            final Vertex prevV = list.get(i - 1);
-            final Vertex nextV = list.get(i);
-            distCycle += LatLon.distanceKM(prevV.getLatLon(), nextV.getLatLon());
-        }
-        return distCycle;
-    }
-
     public int countSuperVertexes() {
         int superVertexes = 0;
         for (int j = 0; j < vertices.size(); j++) {
@@ -330,7 +320,7 @@ public class Cycle {
                     if (v.getNeighbors().contains(u)) {
                         final List<Vertex> subList = vertices.subList(i + 1, j);
                         // can't use getCycleDistance because we remove subgraph - they are not neighbors (can use when we can for perf)
-                        final double subCycleDistance = getCycleDistanceSlow(subList);
+                        final double subCycleDistance = LogisticUtils.getCycleDistanceSlow(subList);
                         if (subCycleDistance > cycleDistance / 10 * 2) {
                             break;
                         }

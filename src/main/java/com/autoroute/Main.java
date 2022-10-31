@@ -1,10 +1,9 @@
 package com.autoroute;
 
+import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.PointVisiter;
 import com.autoroute.logistic.RouteDistanceAlgorithm;
-import com.autoroute.logistic.rodes.Cycle;
 import com.autoroute.osm.LatLon;
-import com.autoroute.osm.tags.TagsFileReader;
 import com.autoroute.telegram.Bot;
 import com.autoroute.telegram.db.Database;
 import com.autoroute.telegram.db.Row;
@@ -80,7 +79,7 @@ public class Main {
         tracksFolder.toFile().mkdirs();
         for (int i = 0; i < routes.size(); i++) {
             var route = routes.get(i);
-            final String fileName = (i + 1) + "_" + ((int) (Cycle.getCycleDistanceSlow(route.route()))) + "km.gpx";
+            final String fileName = (i + 1) + "_" + ((int) (LogisticUtils.getCycleDistanceSlow(route.route()))) + "km.gpx";
             Utils.writeGPX(route, tracksFolder.resolve(fileName).toString());
         }
         final Path zipPath = tracksFolder.resolve("routes.zip");
