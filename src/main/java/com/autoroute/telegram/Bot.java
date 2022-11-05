@@ -40,7 +40,7 @@ public class Bot extends TelegramLongPollingBot {
 
     private static final String SEND_DISTANCE_MESSAGE = """
         We got your location. Now please provide minimum and maximum distance for your trip via space.
-        Difference between them should be more than 20km. Minimum distance is 30km. 
+        Difference between them should be more than 10km. Minimum distance is 30km. 
         They can't be more than 150km (for now).
         Example: \"30 60\"""";
 
@@ -194,7 +194,7 @@ public class Bot extends TelegramLongPollingBot {
                 minDistance < 30 ||
                 maxDistance < minDistance ||
                 minDistance > 150 ||
-                maxDistance - minDistance < 20 ||
+                maxDistance - minDistance < 10 ||
                 maxDistance > 150) {
                 sendMessage(chatId, SEND_DISTANCE_MESSAGE);
             } else {
