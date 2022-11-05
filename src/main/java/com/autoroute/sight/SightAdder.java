@@ -31,6 +31,7 @@ public class SightAdder {
             if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.2 && !sightsInRoute.contains(sight)) {
                 final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
                 final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
+                // TODO: use Dijkstra cache here
                 var dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
                 dijkstra.run(sightVertex);
                 final List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
@@ -57,9 +58,9 @@ public class SightAdder {
                     // TODO: need to check if i + 1 bigger than route.size() ?
                     int index = route.getIndexByVertex(v);
                     route.route().addAll(index + 1, routeFromVToSight);
-                    sightsInRoute.add(sight);
-                    // sights.remove(sight);
                 }
+                sightsInRoute.add(sight);
+                // sights.remove(sight);
             }
         }
         return new Route(route.route(), sightsInRoute, LogisticUtils.getCycleDistanceSlow(route.route()));
