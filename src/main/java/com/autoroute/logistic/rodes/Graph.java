@@ -325,7 +325,7 @@ public class Graph {
 
     public void buildIdentificatorToVertexMap() {
         assert identificatorToVertex == null;
-        identificatorToVertex = new Long2ObjectOpenHashMap<>();
+        identificatorToVertex = new Long2ObjectOpenHashMap<>(vertices.size());
         for (Vertex v : vertices) {
             identificatorToVertex.put(v.getIdentificator(), v);
         }
@@ -431,12 +431,9 @@ public class Graph {
                     if (v.getId() == neighbor.getId()) {
                         continue;
                     }
-                    final double d = distance(v, neighbor);
-                    if (d < distance * 3) { // sometimes with * 2 we lose edge around bor, why?
-                        neighbor.removeNeighbor(u);
-                        neighbor.addNeighbor(v);
-                        v.addNeighbor(neighbor);
-                    }
+                    neighbor.removeNeighbor(u);
+                    neighbor.addNeighbor(v);
+                    v.addNeighbor(neighbor);
                 }
             }
             deleteVerticesFromGraph(closeVertexes);
