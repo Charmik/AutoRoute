@@ -49,12 +49,12 @@ public class Utils {
     }
 
     public static void writeDebugGPX(List<Vertex> vertices, String name) {
-        writeGPX(GpxGenerator.generateRoute(vertices, Collections.emptySet()), "o/" + name + ".gpx");
+        writeGPX(GpxGenerator.generateRoute(vertices, Collections.emptySet()), "o/" + name);
     }
 
     public static void writeDebugGPX(Route route, String name) {
         final GPX cycleGPX = GpxGenerator.generateRoute(route.route(), route.sights());
-        final String fileName = "o/" + name + ".gpx";
+        final String fileName = "o/" + name;
         writeGPX(cycleGPX, fileName);
     }
 
@@ -65,7 +65,7 @@ public class Utils {
 
     public static void writeGPX(GPX gpx, String name) {
         try {
-            final Path path = Paths.get(name);
+            final Path path = Paths.get(name + ".gpx");
             path.toAbsolutePath().getParent().toFile().mkdirs();
             GPX.write(gpx, path);
         } catch (IOException e) {
@@ -171,5 +171,10 @@ public class Utils {
             }
         }
         return directoryToBeDeleted.delete();
+    }
+
+    public static boolean isDebugging() {
+        final String value = System.getProperty("debug");
+        return "true".equals(value);
     }
 }

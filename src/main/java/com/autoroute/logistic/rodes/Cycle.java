@@ -61,12 +61,16 @@ public class Cycle {
             var duplicateReversedVertices = new ArrayList<>(duplicateVertices);
             Collections.reverse(duplicateReversedVertices);
             if (!hasDuplicate(duplicateVertices, result) && !hasDuplicate(duplicateReversedVertices, result)) {
-                Utils.writeDebugGPX(vertices, "cycles/" + result.size() + "_1");
+                if (Utils.isDebugging()) {
+                    Utils.writeDebugGPX(vertices, "cycles/" + result.size() + "_1");
+                }
 
                 if (!replaceSuperVertexesInPath(fullGraph, dijkstraCache)) {
                     return false;
                 }
-                Utils.writeDebugGPX(vertices, "cycles/" + result.size() + "_1");
+                if (Utils.isDebugging()) {
+                    Utils.writeDebugGPX(vertices, "cycles/" + result.size() + "_2");
+                }
 
                 List<Vertex> fullGraphVertexes = new ArrayList<>();
                 for (Vertex v : vertices) {
@@ -75,12 +79,15 @@ public class Cycle {
 
                 Cycle fullCycle = new Cycle(fullGraphVertexes);
                 fullCycle.removeExternalCycles(getCycleDistance(vertices));
-                Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + result.size() + "_1");
+                if (Utils.isDebugging()) {
+                    Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + result.size() + "_3");
+                }
 
                 // TODO: extract code to work only with fullCycle
                 final double distanceToFullCycle = fullCycle.minDistanceToCycle(startVertex, dijkstra);
                 final double cycleFullDistance = getCycleDistance(fullCycle.vertices);
 
+                // TODO: if we have straight road between i & i + X - then we need use it instead of road hook
                 if (isGoodDistance(cycleFullDistance, distanceToFullCycle, minKM, maxKM)) {
                     LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {}",
                         result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes);
@@ -317,7 +324,7 @@ public class Cycle {
                     final Vertex v = vertices.get(i);
                     final Vertex u = vertices.get(j);
                     // TODO: if they are very close by distance - try to merge it with dijkstra?
-                    if (v.getNeighbors().contains(u)) {
+                    if (v.containsNeighbor(u)) {
                         final List<Vertex> subList = vertices.subList(i + 1, j);
                         // can't use getCycleDistance because we remove subgraph - they are not neighbors (can use when we can for perf)
                         final double subCycleDistance = LogisticUtils.getCycleDistanceSlow(subList);
