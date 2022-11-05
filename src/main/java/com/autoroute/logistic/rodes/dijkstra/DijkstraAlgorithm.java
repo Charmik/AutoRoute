@@ -2,8 +2,10 @@ package com.autoroute.logistic.rodes.dijkstra;
 
 import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.Vertex;
+import com.autoroute.osm.LatLon;
 import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -16,7 +18,7 @@ public class DijkstraAlgorithm {
 
     private final Graph g;
     private final Long2DoubleOpenHashMap distances;
-    private Vertex[] prev = null;
+    private Long2ObjectOpenHashMap<Vertex> prev = null;
     private final Vertex startVertex;
 
     public DijkstraAlgorithm(Graph g, Vertex startVertex) {
@@ -30,22 +32,18 @@ public class DijkstraAlgorithm {
     }
 
     public void run(@Nullable Vertex finish) {
-        final List<Vertex> vertices = g.getVertices();
-
-        this.prev = new Vertex[vertices.size()];
-
-        for (Vertex v : vertices) {
-            distances.put(v.getIdentificator(), Double.MAX_VALUE);
-        }
+        this.prev = new Long2ObjectOpenHashMap<>();
         distances.put(startVertex.getIdentificator(), 0d);
 
         TreeSet<DijNode> queue = new TreeSet<>();
-        for (Vertex v : vertices) {
-            queue.add(new DijNode(v.getId(), distances.get(v.getIdentificator())));
-        }
+        queue.add(new DijNode(startVertex.getIdentificator(),
+            distances.get(startVertex.getIdentificator()),
+            distances.get(startVertex.getIdentificator())));
 
         while (!queue.isEmpty()) {
-            dijkstraIteration(finish, queue);
+            if (!dijkstraIteration(finish, queue)) {
+                break;
+            }
         }
         if (finish == null) {
             for (Long2DoubleMap.Entry entry : distances.long2DoubleEntrySet()) {
@@ -54,29 +52,43 @@ public class DijkstraAlgorithm {
         }
     }
 
-    private void dijkstraIteration(@Nullable Vertex finish, TreeSet<DijNode> queue) {
+    private boolean dijkstraIteration(@Nullable Vertex finish, TreeSet<DijNode> queue) {
         final DijNode node = queue.pollFirst();
         assert node != null;
-        Vertex v = g.getVertices().get(node.id());
+        Vertex v = g.findByIdentificator(node.identificator);
 
         for (Vertex u : v.getNeighbors()) {
             assert u.containsNeighbor(v);
-            final DijNode uNode = new DijNode(u.getId(), distances.get(u.getIdentificator()));
-            if (!queue.contains(uNode)) {
-                continue;
+            double distanceToU = distances.get(u.getIdentificator());
+            if (distanceToU == 0 && u.getIdentificator() != startVertex.getIdentificator()) {
+                distanceToU = Integer.MAX_VALUE;
             }
-            double d = distances.get(v.getIdentificator()) + v.getDistance(u);
-            if (d < distances.get(u.getIdentificator())) {
+            final DijNode uNode = new DijNode(u.getIdentificator(), distanceToU, calculateCost(finish, u));
+            final double distanceToV = distances.get(v.getIdentificator());
+            double d = distanceToV + v.getDistance(u);
+            if (d < distanceToU) {
                 queue.remove(uNode);
                 distances.put(u.getIdentificator(), d);
-                prev[u.getId()] = v;
-                queue.add(new DijNode(u.getId(), d));
+                if (prev.get(v.getIdentificator()) != null) {
+                    // to be sure we don't have cycle prevs
+                    assert prev.get(v.getIdentificator()).getIdentificator() != u.getIdentificator();
+                }
+                prev.put(u.getIdentificator(), v);
+                queue.add(new DijNode(u.getIdentificator(), d, calculateCost(finish, u)));
                 if (finish != null && u.getIdentificator() == finish.getIdentificator()) {
-                    queue.clear();
-                    break;
+                    return false;
                 }
             }
         }
+        return true;
+    }
+
+    private double calculateCost(@Nullable Vertex finish, Vertex u) {
+        double cost = distances.get(u.getIdentificator());
+        if (finish != null) {
+            cost += LatLon.fastDistance(u.getLatLon(), finish.getLatLon());
+        }
+        return cost;
     }
 
     public void assertStartVertex(Vertex v) {
@@ -99,7 +111,7 @@ public class DijkstraAlgorithm {
         Vertex k = u;
         while (true) {
             route.add(k);
-            Vertex nextVertex = prev[k.getId()];
+            Vertex nextVertex = prev.get(k.getIdentificator());
             if (nextVertex == null) {
                 break;
             }
@@ -113,14 +125,29 @@ public class DijkstraAlgorithm {
         return route;
     }
 
-    private record DijNode(int id, double distance) implements Comparable<DijNode> {
+    private record DijNode(long identificator, double distance, double heuristicCost) implements Comparable<DijNode> {
 
         @Override
         public int compareTo(@NotNull DijNode o) {
-            if (distance == o.distance) {
-                return Integer.compare(id, o.id);
+            if (heuristicCost == o.heuristicCost) {
+                return Long.compare(identificator, o.identificator);
             }
-            return Double.compare(distance, o.distance);
+            return Double.compare(heuristicCost, o.heuristicCost);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            DijNode dijNode = (DijNode) o;
+
+            return identificator == dijNode.identificator;
+        }
+
+        @Override
+        public int hashCode() {
+            return Long.hashCode(identificator);
         }
     }
 }
