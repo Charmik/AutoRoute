@@ -105,7 +105,7 @@ public class Utils {
         System.out.println("wrote graph to the file");
     }
 
-    public static OverpassResponse readVertices() {
+    public static OverpassResponse readVertices(LatLon start, int maxDistanceKM) {
         OverpassResponse r = new OverpassResponse();
         final List<String> lines;
         try {
@@ -124,7 +124,10 @@ public class Utils {
             double lat = Double.parseDouble(strs[1]);
             double lon = Double.parseDouble(strs[2]);
             var latlon = new LatLon(lat, lon);
-            r.add(new Node(id, new String[0], new String[0], latlon));
+            final double distance = LatLon.distanceKM(start, latlon);
+            if (distance < maxDistanceKM / 2) {
+                r.add(new Node(id, new String[0], new String[0], latlon));
+            }
         }
 
         int waysCount = Integer.parseInt(lines.get(nodesCount + 1));
