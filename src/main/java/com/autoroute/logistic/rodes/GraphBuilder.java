@@ -5,6 +5,7 @@ import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.gpx.GpxGenerator;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
+import com.autoroute.utils.Utils;
 import io.jenetics.jpx.GPX;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -42,9 +43,16 @@ public class GraphBuilder {
 
         generalPhases(g, start, maxDistanceKM, identificatorStartVertex, 0.1);
 
+        if (Utils.isDebugging()) {
+            Utils.writeDebugGPX(g.getVertices(), "graph/g1");
+        }
         LOGGER.info("Start removeCloseVertexes");
         g.removeCloseVertexes(1, identificatorStartVertex);
         g.checkGraph(identificatorStartVertex);
+
+        if (Utils.isDebugging()) {
+            Utils.writeDebugGPX(g.getVertices(), "graph/g2");
+        }
 
         var superVertexes = g.getVertices().stream()
             .filter(Vertex::isSuperVertex)
@@ -62,6 +70,9 @@ public class GraphBuilder {
 
         LOGGER.info("Start removeEdges");
         g.removeEdges(identificatorStartVertex);
+        if (Utils.isDebugging()) {
+            Utils.writeDebugGPX(g.getVertices(), "graph/g3");
+        }
         g.checkGraph(identificatorStartVertex);
         LOGGER.info("Finish removeEdges");
         LOGGER.info("graph7 has: {} vertices", g.getVertices().size());
@@ -71,6 +82,9 @@ public class GraphBuilder {
 
         assert g.findNearestVertex(start).getIdentificator() == identificatorStartVertex;
         g.checkGraph(identificatorStartVertex);
+        if (Utils.isDebugging()) {
+            Utils.writeDebugGPX(g.getVertices(), "graph/compactGraph");
+        }
         return g;
     }
 
