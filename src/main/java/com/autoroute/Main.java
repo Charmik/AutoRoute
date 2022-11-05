@@ -79,7 +79,7 @@ public class Main {
         tracksFolder.toFile().mkdirs();
         for (int i = 0; i < routes.size(); i++) {
             var route = routes.get(i);
-            final String fileName = (i + 1) + "_" + ((int) (LogisticUtils.getCycleDistanceSlow(route.route()))) + "km.gpx";
+            final String fileName = (i + 1) + "_" + ((int) (LogisticUtils.getCycleDistanceSlow(route.route()))) + "km";
             Utils.writeGPX(route, tracksFolder.resolve(fileName).toString());
         }
         final Path zipPath = tracksFolder.resolve("routes.zip");
