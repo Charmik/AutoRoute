@@ -28,39 +28,41 @@ public class SightAdder {
                 break;
             }
             Vertex v = LogisticUtils.findNearestVertex(sight.latLon(), route.route());
+            if (v.isSynthetic()) {
+                continue;
+            }
             if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.2 && !sightsInRoute.contains(sight)) {
                 final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
                 final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
                 // TODO: use Dijkstra cache here
                 var dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
                 dijkstra.run(sightVertex);
-                final List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
+                List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
 
-                boolean addToPath = true;
-                for (int j = 2; j < routeFromVToSight.size() - 2; j++) {
-                    var v1 = routeFromVToSight.get(j).getLatLon();
-                    var v2 = routeFromVToSight.get(j + 1).getLatLon();
-                    var v3 = routeFromVToSight.get(j + 2).getLatLon();
-                    final double angle = LatLon.angle(v1, v2, v3);
-                    final double angleAbs = Math.abs(angle);
-                    if (angleAbs < 1 || Math.abs(angleAbs - Math.PI * 2) < 1) {
-                    } else {
-                        addToPath = false;
+                final double distanceFromLastToSight =
+                    LatLon.distanceKM(routeFromVToSight.get(routeFromVToSight.size() - 1).getLatLon(), sight.latLon());
+                for (int i = 0; i < routeFromVToSight.size() - 1; i++) {
+                    final Vertex u = routeFromVToSight.get(i);
+                    if (LatLon.distanceKM(u.getLatLon(), sight.latLon()) < distanceFromLastToSight) {
+                        routeFromVToSight = routeFromVToSight.subList(0, i + 1);
                         break;
                     }
                 }
 
-                if (addToPath) {
-                    final ArrayList<Vertex> reversedPath = new ArrayList<>(routeFromVToSight);
-                    Collections.reverse(reversedPath);
-                    routeFromVToSight.addAll(reversedPath);
-                    // TODO: check that distance < maxDistance
-                    // TODO: need to check if i + 1 bigger than route.size() ?
-                    int index = route.getIndexByVertex(v);
-                    route.route().addAll(index + 1, routeFromVToSight);
+                // TODO: we need to have ALL types of roads here in fullGraph to be able to find a route which is not a road
+                if (routeFromVToSight.size() == 1) {
+                    // we didn't find a route between start & finish
+                    routeFromVToSight.add(new Vertex(sight.latLon()));
                 }
+                final ArrayList<Vertex> reversedPath = new ArrayList<>(routeFromVToSight);
+                Collections.reverse(reversedPath);
+                routeFromVToSight.addAll(reversedPath);
+                // TODO: check that distance < maxDistance
+                // TODO: need to check if i + 1 bigger than route.size() ?
+                int index = route.getIndexByVertex(v);
+                route.route().addAll(index + 1, routeFromVToSight);
                 sightsInRoute.add(sight);
-                // sights.remove(sight);
+                // sights.remove(sight); // uncomment if we want unique sights
             }
         }
         return new Route(route.route(), sightsInRoute, LogisticUtils.getCycleDistanceSlow(route.route()));
