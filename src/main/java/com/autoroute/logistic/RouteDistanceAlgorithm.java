@@ -36,6 +36,7 @@ public class RouteDistanceAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(RouteDistanceAlgorithm.class);
     private static final int CORES = 1; //Runtime.getRuntime().availableProcessors();
+    private static final int MAX_FINDING_TIME = 1 * 60 * 1000;
 
     // TODO: moved ThreadPool from here
 
@@ -125,6 +126,7 @@ public class RouteDistanceAlgorithm {
     @NotNull
     private static List<Route> generateRoutes(OverpassResponse rodes, LatLon start, int minDistance, int maxDistance, Graph fullGraph) {
         final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
+        LOGGER.info("start building compact graph");
         Graph compactGraph = GraphBuilder.buildGraph(rodes, start,
             startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
 
@@ -255,9 +257,12 @@ public class RouteDistanceAlgorithm {
             }
             tries++;
             final long now = System.currentTimeMillis();
-            final int MAX_FINDING_TIME = 1 * 15 * 1000;
-            if (now - lastTimeFoundNewRouteTimestamp > MAX_FINDING_TIME) {
-                LOGGER.info("couldn't find a new route for more then: {} seconds", MAX_FINDING_TIME / 1000);
+            int maxTime = MAX_FINDING_TIME;
+            if (Utils.isDebugging()) {
+                maxTime /= 6;
+            }
+            if (now - lastTimeFoundNewRouteTimestamp > maxTime) {
+                LOGGER.info("couldn't find a new route for more then: {} seconds", maxTime / 1000);
                 break;
             }
             if (tries % 1000 == 0) {
