@@ -18,6 +18,10 @@ public class Vertex {
     private double[] distances; // TODO: can be an array of ints of ids, but should be updated properly
     private boolean superVertex = false;
 
+    public Vertex(LatLon latLon) {
+        this(-1, -1, latLon);
+    }
+
     public Vertex(int id, long identificator, LatLon latLon) {
         this.id = id;
         this.identificator = identificator;
@@ -97,6 +101,10 @@ public class Vertex {
 
     public void setSuperVertex() {
         this.superVertex = true;
+    }
+
+    public boolean isSynthetic() {
+        return id == -1;
     }
 
     @Override
