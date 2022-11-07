@@ -85,6 +85,8 @@ public class OverPassAPI {
         query.append(radiusMeters);
         query.append("\"/>\n");
         query.append("<has-kv k=\"highway\" regv=\"trunk|primary|secondary|tertiary|trunk_link|primary_link|secondary_link|bus_guideway|road|busway\"/>\n");
+        // TODO: unclassified|residential not more than 5-10% of the way? or add it to the path to sight (all types).
+//        query.append("<has-kv k=\"highway\" regv=\"trunk|primary|secondary|tertiary|trunk_link|primary_link|secondary_link|bus_guideway|road|busway|unclassified|residential\"/>\n");
         query.append("</query>\n");
         query.append("<union>\n");
         query.append("<item/>\n");
