@@ -164,7 +164,6 @@ public class Cycle {
 
                     final double oldDistance = v.getDistance(u);
                     final double newDistanceOfPath = getCycleDistance(vToUPath);
-                    assert newDistanceOfPath >= oldDistance;
                     // distance increased significantly, probably with superNode we went over river/big road
                     // where we can't really ride. Can we do it better here?
                     // TODO: compare it with full distance? if it's small percent - maybe it's okay?
