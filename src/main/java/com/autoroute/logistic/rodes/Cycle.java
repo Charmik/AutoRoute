@@ -290,7 +290,7 @@ public class Cycle {
     }
 
     public static double getCycleDistance(List<Vertex> list) {
-        assert list.size() > 2;
+        assert list.size() >= 2;
         double distCycle = 0;
         for (int j = 1; j < list.size(); j++) {
             final Vertex prevV = list.get(j - 1);
