@@ -65,6 +65,7 @@ public class SightAdder {
                 // sights.remove(sight); // uncomment if we want unique sights
             }
         }
+        // TODO: if we already have another route which include all sights from this route - skip this one?
         return new Route(route.route(), sightsInRoute, LogisticUtils.getCycleDistanceSlow(route.route()));
     }
 }
