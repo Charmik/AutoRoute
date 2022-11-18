@@ -315,8 +315,8 @@ public class Graph {
 
     public void calculateSuperVertices() {
         superVertices = vertices.stream()
-            .filter(Vertex::isSuperVertex)
-            .toList();
+                .filter(Vertex::isSuperVertex)
+                .toList();
     }
 
     public List<Vertex> getVertices() {
@@ -368,18 +368,22 @@ public class Graph {
     // TODO: make parallel
     public void removeCloseVertexes(double distance, long identificatorStartVertex) {
         int tries = 0;
+        int iteration = 0;
         while (true) {
+            iteration++;
             Vertex bestVertex = null;
             int countMaxNeighbours = 0;
 
             Vertex randomVertex = vertices.get(random.nextInt(vertices.size()));
             final LatLon randomLatLon = randomVertex.getLatLon();
-            List<Vertex> sortVertices = new ArrayList<>(vertices);
-            sortVertices.sort((o1, o2) -> {
+
+            Vertex[] verticesArr = vertices.toArray(new Vertex[0]);
+            Arrays.parallelSort(verticesArr, (o1, o2) -> {
                 double distance1 = LatLon.fastDistance(o1.getLatLon(), randomLatLon);
                 double distance2 = LatLon.fastDistance(o2.getLatLon(), randomLatLon);
                 return Double.compare(distance1, distance2);
             });
+            List<Vertex> sortVertices = Arrays.asList(verticesArr);
 
             for (int m = 0; m < sortVertices.size(); m++) {
                 int count = 0;
@@ -387,12 +391,12 @@ public class Graph {
                 int j = m + 1;
                 final Vertex midV = sortVertices.get(m);
                 while (i >= 0
-                    && distance(sortVertices.get(i), midV) < distance) {
+                        && distance(sortVertices.get(i), midV) < distance) {
                     count++;
                     i--;
                 }
                 while (j < sortVertices.size()
-                    && distance(sortVertices.get(j), midV) < distance) {
+                        && distance(sortVertices.get(j), midV) < distance) {
                     count++;
                     j++;
                 }
@@ -437,6 +441,9 @@ public class Graph {
                 }
             }
             deleteVerticesFromGraph(closeVertexes);
+            if (iteration % 50 == 0) {
+                LOGGER.info("graph removed some vertexes, now: {}", vertices.size());
+            }
         }
     }
 
