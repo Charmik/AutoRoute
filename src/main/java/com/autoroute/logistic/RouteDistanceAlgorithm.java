@@ -90,6 +90,7 @@ public class RouteDistanceAlgorithm {
         // TODO: if 2 routes have the same sights - choose only 1 of them?
         LOGGER.info("found: {} routes with good sights", routesWithSights.size());
 
+        // TODO: save original index in gpx
         routesWithSights.sort((r1, r2) -> {
             final Set<Sight> s1 = r1.sights();
             final Set<Sight> s2 = r2.sights();

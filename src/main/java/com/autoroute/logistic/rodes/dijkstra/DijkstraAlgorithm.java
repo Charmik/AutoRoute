@@ -118,7 +118,9 @@ public class DijkstraAlgorithm {
         DijkstraCache.Pair p = new DijkstraCache.Pair(startVertex.getIdentificator(), u.getIdentificator());
         List<Vertex> cacheResult = dijkstraCache.get(p);
         if (cacheResult != null) {
-            return cacheResult;
+            assert cacheResult.get(0).getIdentificator() == startVertex.getIdentificator();
+            assert cacheResult.get(cacheResult.size() -1).getIdentificator() == u.getIdentificator();
+            return new ArrayList<>(cacheResult);
         }
 
         assert g.getVertices().contains(u);
@@ -141,9 +143,10 @@ public class DijkstraAlgorithm {
         }
         Collections.reverse(route);
         assert route.get(0).getIdentificator() == startVertex.getIdentificator();
+        assert route.get(route.size() -1).getIdentificator() == u.getIdentificator();
 
-        dijkstraCache.put(p, new ArrayList<>(route));
-        return route;
+        dijkstraCache.put(p, Collections.unmodifiableList(route));
+        return new ArrayList<>(route);
     }
 
     private record DijNode(long identificator, double distance, double heuristicCost) implements Comparable<DijNode> {
