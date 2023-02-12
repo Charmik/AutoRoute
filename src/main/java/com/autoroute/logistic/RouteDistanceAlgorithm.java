@@ -62,7 +62,7 @@ public class RouteDistanceAlgorithm {
 
         // for fast testing only
 //         Utils.writeVertecesToFile(rodes);
-        final OverpassResponse rodes = Utils.readVertices(new LatLon(34.711433, 33.131185), 60);
+//        final OverpassResponse rodes = Utils.readVertices(new LatLon(34.711433, 33.131185), 60);
         return buildRoutes(rodes, start, minDistanceKM, maxDistanceKM);
     }
 
