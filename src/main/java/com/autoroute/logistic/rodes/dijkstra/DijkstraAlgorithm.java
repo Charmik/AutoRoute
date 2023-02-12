@@ -6,6 +6,8 @@ import com.autoroute.osm.LatLon;
 import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -16,8 +18,11 @@ import java.util.TreeSet;
 
 public class DijkstraAlgorithm {
 
+    private static final Logger LOGGER = LogManager.getLogger(DijkstraAlgorithm.class);
+
     private final Graph g;
     private final Long2DoubleOpenHashMap distances;
+    private final DijkstraCache dijkstraCache;
     private Long2ObjectOpenHashMap<Vertex> prev = null;
     private final Vertex startVertex;
 
@@ -25,6 +30,7 @@ public class DijkstraAlgorithm {
         this.g = g;
         this.startVertex = startVertex;
         this.distances = new Long2DoubleOpenHashMap(g.size());
+        this.dijkstraCache = DijkstraCache.getCache();
     }
 
     public void run() {
@@ -32,6 +38,13 @@ public class DijkstraAlgorithm {
     }
 
     public void run(@Nullable Vertex finish) {
+        if (finish != null) {
+            DijkstraCache.Pair p = new DijkstraCache.Pair(startVertex.getIdentificator(), finish.getIdentificator());
+            if (dijkstraCache.get(p) != null) {
+                return;
+            }
+        }
+
         this.prev = new Long2ObjectOpenHashMap<>();
         distances.put(startVertex.getIdentificator(), 0d);
 
@@ -102,6 +115,12 @@ public class DijkstraAlgorithm {
     }
 
     public List<Vertex> getRouteFromFullGraph(Vertex u) {
+        DijkstraCache.Pair p = new DijkstraCache.Pair(startVertex.getIdentificator(), u.getIdentificator());
+        List<Vertex> cacheResult = dijkstraCache.get(p);
+        if (cacheResult != null) {
+            return cacheResult;
+        }
+
         assert g.getVertices().contains(u);
         final Vertex newU = g.findNearestVertex(u.getLatLon());
         assert u.getIdentificator() == newU.getIdentificator();
@@ -111,6 +130,7 @@ public class DijkstraAlgorithm {
         Vertex k = u;
         while (true) {
             route.add(k);
+            assert this.prev != null;
             Vertex nextVertex = prev.get(k.getIdentificator());
             if (nextVertex == null) {
                 break;
@@ -122,6 +142,7 @@ public class DijkstraAlgorithm {
         Collections.reverse(route);
         assert route.get(0).getIdentificator() == startVertex.getIdentificator();
 
+        dijkstraCache.put(p, new ArrayList<>(route));
         return route;
     }
 

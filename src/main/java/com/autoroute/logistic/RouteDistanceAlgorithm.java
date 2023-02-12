@@ -11,7 +11,6 @@ import com.autoroute.logistic.rodes.GraphBuilder;
 import com.autoroute.logistic.rodes.Route;
 import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
-import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.tags.SightMapper;
 import com.autoroute.osm.tags.TagsFileReader;
@@ -63,7 +62,7 @@ public class RouteDistanceAlgorithm {
 
         // for fast testing only
 //         Utils.writeVertecesToFile(rodes);
-//         final OverpassResponse rodes = Utils.readVertices();
+        final OverpassResponse rodes = Utils.readVertices(new LatLon(34.711433, 33.131185), 60);
         return buildRoutes(rodes, start, minDistanceKM, maxDistanceKM);
     }
 
@@ -94,7 +93,7 @@ public class RouteDistanceAlgorithm {
             if (!newRoute.sights().isEmpty()) {
                 routesWithSights.add(newRoute);
             }
-            LOGGER.info("processed: {}/{} routes with: {} sights", i, routes.size(), goodSights.size());
+            LOGGER.info("processed: {}/{} routes with: {} sights", i + 1, routes.size(), goodSights.size());
         }
         // TODO: if 2 routes have the same sights - choose only 1 of them?
         LOGGER.info("found: {} routes with good sights", routesWithSights.size());
@@ -206,17 +205,16 @@ public class RouteDistanceAlgorithm {
         int newSize;
         List<Route> routes = new ArrayList<>();
 
-        final DijkstraCache dijkstraCache = new DijkstraCache();
         long lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
         do {
             int oldSize = cycles.size();
-            g.findAllCycles(startVertex, cycles, dijkstra, dijkstraCache);
+            g.findAllCycles(startVertex, cycles, dijkstra);
 
             newSize = cycles.size();
-            if (cycles.size() > oldSize) {
-                for (int i = oldSize; i < cycles.size(); i++) {
+            if (newSize > oldSize) {
+                for (int i = oldSize; i < newSize; i++) {
                     var cycle = cycles.get(i);
-                    LOGGER.info("wrote a cycle: {} with: {} vertexes", i, cycle.size());
+                    LOGGER.info("wrote a cycle: {} with: {} vertexes", i + 1, cycle.size());
 
                     dijkstra.assertStartVertex(startVertex);
                     double minDistanceToCycle = Double.MAX_VALUE;
@@ -234,7 +232,6 @@ public class RouteDistanceAlgorithm {
                     assert closestVertex != null;
                     assert indexClosestVertex != -1;
                     final List<Vertex> routeToCycle = dijkstra.getRouteFromFullGraph(closestVertex);
-                    assert routeToCycle.get(routeToCycle.size() - 1).getIdentificator() == closestVertex.getIdentificator();
 
                     final List<Vertex> fullRoute = new ArrayList<>(routeToCycle);
                     int j = (indexClosestVertex + 1) % cycle.size();

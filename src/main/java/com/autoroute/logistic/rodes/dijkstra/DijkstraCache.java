@@ -8,15 +8,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DijkstraCache {
+class DijkstraCache {
 
     private static final Logger LOGGER = LogManager.getLogger(DijkstraCache.class);
+    private static final DijkstraCache CACHE;
+
+    static {
+        CACHE = new DijkstraCache();
+    }
 
     private final Map<Pair, List<Vertex>> cache = new HashMap<>();
     private int hit = 0;
     private int miss = 0;
 
-    public DijkstraCache() {
+    private DijkstraCache() {
+    }
+
+    public static DijkstraCache getCache() {
+        return CACHE;
     }
 
     public List<Vertex> get(Pair p) {

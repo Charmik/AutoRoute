@@ -2,7 +2,6 @@ package com.autoroute.logistic.rodes;
 
 import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
-import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import com.autoroute.utils.Utils;
 import org.apache.logging.log4j.LogManager;
@@ -31,7 +30,7 @@ public class Cycle {
     }
 
     public boolean tryAddCycle(Graph fullGraph, Vertex startVertex, List<Cycle> result,
-                               DijkstraAlgorithm dijkstra, int minKM, int maxKM, DijkstraCache dijkstraCache) {
+                               DijkstraAlgorithm dijkstra, int minKM, int maxKM) {
         assertFirstAndEndCycle();
 
         final double distanceToCycle = minDistanceToCycle(startVertex, dijkstra);
@@ -62,14 +61,14 @@ public class Cycle {
             Collections.reverse(duplicateReversedVertices);
             if (!hasDuplicate(duplicateVertices, result) && !hasDuplicate(duplicateReversedVertices, result)) {
                 if (Utils.isDebugging()) {
-                    Utils.writeDebugGPX(vertices, "cycles/" + result.size() + "_1");
+                    Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_1");
                 }
 
-                if (!replaceSuperVertexesInPath(fullGraph, dijkstraCache)) {
+                if (!replaceSuperVertexesInPath(fullGraph)) {
                     return false;
                 }
                 if (Utils.isDebugging()) {
-                    Utils.writeDebugGPX(vertices, "cycles/" + result.size() + "_2");
+                    Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_2");
                 }
 
                 List<Vertex> fullGraphVertexes = new ArrayList<>();
@@ -80,7 +79,7 @@ public class Cycle {
                 Cycle fullCycle = new Cycle(fullGraphVertexes);
                 fullCycle.removeExternalCycles(getCycleDistance(vertices));
                 if (Utils.isDebugging()) {
-                    Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + result.size() + "_3");
+                    Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + (result.size() + 1) + "_3");
                 }
 
                 // TODO: extract code to work only with fullCycle
@@ -89,12 +88,11 @@ public class Cycle {
 
                 // TODO: if we have straight road between i & i + X - then we need use it instead of road hook
                 if (isGoodDistance(cycleFullDistance, distanceToFullCycle, minKM, maxKM)) {
-                    LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {}",
-                        result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes);
-
                     // TODO: reverse cycle, depends on the country left/right roads
                     fullCycle.setCompactVertices(duplicateVertices);
                     result.add(fullCycle);
+                    LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {}",
+                            result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes);
                 }
                 return true;
             }
@@ -125,7 +123,7 @@ public class Cycle {
         return inCity;
     }
 
-    private boolean replaceSuperVertexesInPath(Graph fullGraph, DijkstraCache cache) {
+    private boolean replaceSuperVertexesInPath(Graph fullGraph) {
         assert size() > 3;
         boolean progress = true;
         assertFirstAndEndCycle();
@@ -150,17 +148,9 @@ public class Cycle {
                     var v = vertices.get(startIndex);
                     var u = vertices.get(finishIndex);
 
-                    var p = new DijkstraCache.Pair(v.getIdentificator(), u.getIdentificator());
-                    List<Vertex> vToUPath;
-                    final List<Vertex> cachePath = cache.get(p);
-                    if (cachePath == null) {
-                        final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
-                        alg.run(u);
-                        vToUPath = alg.getRouteFromFullGraph(u);
-                        cache.put(p, vToUPath);
-                    } else {
-                        vToUPath = cachePath;
-                    }
+                    final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
+                    alg.run(u);
+                    List<Vertex> vToUPath = alg.getRouteFromFullGraph(u);
 
                     final double oldDistance = v.getDistance(u);
                     final double newDistanceOfPath = getCycleDistance(vToUPath);

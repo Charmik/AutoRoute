@@ -2,23 +2,13 @@ package com.autoroute.logistic.rodes;
 
 import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
-import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.*;
 
 public class Graph {
 
@@ -116,7 +106,7 @@ public class Graph {
     }
 
     // TODO: move it out from Graph to some CycleAlgorithm which works with the graph.
-    public void findAllCycles(Vertex startVertex, List<Cycle> result, DijkstraAlgorithm dijkstra, DijkstraCache dijkstraCache) {
+    public void findAllCycles(Vertex startVertex, List<Cycle> result, DijkstraAlgorithm dijkstra) {
         Vertex[] prev = new Vertex[vertices.size()];
         Arrays.fill(prev, null);
         boolean[] visited = new boolean[vertices.size()];
@@ -139,21 +129,21 @@ public class Graph {
                     prev[u.getId()] = v;
                     stack.addFirst(u);
                 } else if (prev[v.getId()].getId() != u.getId()) {
-                    tryAddNewCycle(startVertex, result, prev, v, u, dijkstra, dijkstraCache);
+                    tryAddNewCycle(startVertex, result, prev, v, u, dijkstra);
                 }
             }
         }
     }
 
     private void tryAddNewCycle(Vertex startVertex, List<Cycle> result,
-                                Vertex[] prev, Vertex v, Vertex u, DijkstraAlgorithm dijkstra, DijkstraCache dijkstraCache) {
+                                Vertex[] prev, Vertex v, Vertex u, DijkstraAlgorithm dijkstra) {
 
         var cycle = getCycle(prev, v, u);
         if (cycle == null) {
             return;
         }
 
-        if (cycle.tryAddCycle(fullGraph, startVertex, result, dijkstra, minKM, maxKM, dijkstraCache)) {
+        if (cycle.tryAddCycle(fullGraph, startVertex, result, dijkstra, minKM, maxKM)) {
 
         } else {
             // TODO: get some result from tryAddCycle. if distance too big - don't go deeper in dfs?

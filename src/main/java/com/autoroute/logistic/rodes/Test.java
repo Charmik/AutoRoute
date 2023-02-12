@@ -30,7 +30,7 @@ public class Test {
         List<Cycle> cycles = new ArrayList<>();
         final DijkstraAlgorithm alg = new DijkstraAlgorithm(g, v1);
         alg.run();
-        g.findAllCycles(v1, cycles, alg, null);
+        g.findAllCycles(v1, cycles, alg);
         System.out.println(cycles);
     }
 
