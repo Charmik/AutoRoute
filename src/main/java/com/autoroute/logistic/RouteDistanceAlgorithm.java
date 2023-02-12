@@ -5,11 +5,7 @@ import com.autoroute.api.overpass.Box;
 import com.autoroute.api.overpass.OverPassAPI;
 import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.api.trip.services.OsrmAPI;
-import com.autoroute.logistic.rodes.Cycle;
-import com.autoroute.logistic.rodes.Graph;
-import com.autoroute.logistic.rodes.GraphBuilder;
-import com.autoroute.logistic.rodes.Route;
-import com.autoroute.logistic.rodes.Vertex;
+import com.autoroute.logistic.rodes.*;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.tags.SightMapper;
@@ -21,11 +17,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -126,8 +118,9 @@ public class RouteDistanceAlgorithm {
     private static List<Route> generateRoutes(OverpassResponse rodes, LatLon start, int minDistance, int maxDistance, Graph fullGraph) {
         final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
         LOGGER.info("start building compact graph");
+        // TODO: can we reuse fullGraph not to build Vertexes, just copy it?
         Graph compactGraph = GraphBuilder.buildGraph(rodes, start,
-            startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
+                startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
 
         var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
         fullGraph.calculateDistanceForNeighbours();
@@ -152,20 +145,6 @@ public class RouteDistanceAlgorithm {
             return Collections.emptyList();
         }
         LOGGER.info("found: {} original sights", overpassResponse.getNodes().size());
-        if (overpassResponse.getNodes().isEmpty()) {
-            for (int i = 0; i < 5; i++) {
-                LOGGER.warn("didn't find any sights, try again: {}", i);
-                nodesFuture = getNodesAsync(start, maxDistance);
-                try {
-                    overpassResponse = nodesFuture.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    LOGGER.warn("exception in getting nodes", e);
-                }
-                if (!overpassResponse.getNodes().isEmpty()) {
-                    break;
-                }
-            }
-        }
         var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes());
         sights.sort(Comparator.comparingInt(Sight::rating).reversed());
         LOGGER.info("found: {} sorted sights", overpassResponse.getNodes().size());
@@ -189,7 +168,17 @@ public class RouteDistanceAlgorithm {
             start.lat() + diffDegree,
             start.lon() + diffDegree
         );
-        return OSM_POOL.submit(() -> overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags()));
+        return OSM_POOL.submit(() -> {
+            for (int i = 0; i < 5; i++) {
+                OverpassResponse response = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
+                if (!response.getNodes().isEmpty()) {
+                    return response;
+                }
+                LOGGER.info("didn't find any sights, try again: {}", i);
+            }
+            LOGGER.warn("we couldn't get sights with retries, return empty result");
+            return new OverpassResponse();
+        });
     }
 
     // TODO: make parallel, 1 dfs for every thread. duplicates in merge-thread once again?
@@ -243,10 +232,11 @@ public class RouteDistanceAlgorithm {
                     Collections.reverse(routeToCycle);
                     fullRoute.addAll(routeToCycle);
                     final double routeDistance = LogisticUtils.getCycleDistanceSlow(fullRoute);
-                    routes.add(new Route(fullRoute, routeDistance));
+                    Route route = new Route(fullRoute, routeDistance);
+                    routes.add(route);
                     // TODO: put distance in Route class which we return
 
-                    Utils.writeDebugGPX(fullRoute, "routes/" + i + "_" + (int) routeDistance);
+                    Utils.writeDebugGPX(fullRoute, "routes/" + (i + 1) + "_" + (int) routeDistance);
                     lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
                 }
                 tries = 0;
