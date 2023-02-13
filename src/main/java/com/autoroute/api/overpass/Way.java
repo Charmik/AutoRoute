@@ -1,9 +1,8 @@
 package com.autoroute.api.overpass;
 
-import java.util.HashMap;
-import java.util.Map;
+import javax.annotation.Nullable;
 
-public record Way(long id, long[] nodesIds) {
+public record Way(long id, long[] nodesIds, @Nullable String ref) {
 
     @Override
     public boolean equals(Object o) {

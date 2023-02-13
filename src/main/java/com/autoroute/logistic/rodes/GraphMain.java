@@ -25,8 +25,8 @@ public class GraphMain {
     public static void main(String[] args) throws IOException {
         final long startTime = System.currentTimeMillis();
         LOGGER.info("Start process request");
-        final int MIN_KM = 10;
-        final int MAX_KM = 40;
+        final int MIN_KM = 40;
+        final int MAX_KM = 100;
 
         for (LatLon start : points) {
 

@@ -12,10 +12,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 
 public class Cycle {
 
     private static final Logger LOGGER = LogManager.getLogger(Cycle.class);
+    private static long DEBUG_COUNTER = 0;
 
     private final List<Vertex> vertices;
     private @Nullable List<Vertex> compactVertices = null;
@@ -32,6 +34,7 @@ public class Cycle {
     public boolean tryAddCycle(Graph fullGraph, Vertex startVertex, List<Cycle> result,
                                DijkstraAlgorithm dijkstra, int minKM, int maxKM) {
         assertFirstAndEndCycle();
+        DEBUG_COUNTER++;
 
         final double distanceToCycle = minDistanceToCycle(startVertex, dijkstra);
         final double cycleDistance = getCycleDistance(vertices);
@@ -44,15 +47,10 @@ public class Cycle {
             && size() > 50
             // TODO: && don't cross yourself
         ) {
-            // To be sure that Start vertex is not changed.
-            while (vertices.get(0).isSuperVertex() || vertices.get(vertices.size() - 1).isSuperVertex()) {
-                assertFirstAndEndCycle();
-                vertices.remove(0);
-                vertices.add(vertices.get(0));
-                assertFirstAndEndCycle();
-            }
+            removeSuperVerticesAtTheStartAndEnd();
             assertFirstAndEndCycle();
             removeExternalCycles(cycleDistance);
+            removeExternalGoToAnotherRoadAndComeBack(fullGraph);
             if (isInCity(countSuperVertexes()) || size() < 50) {
                 return false;
             }
@@ -92,12 +90,22 @@ public class Cycle {
                     fullCycle.setCompactVertices(duplicateVertices);
                     result.add(fullCycle);
                     LOGGER.info("index: {}, distanceToCycle: {}, cycleDistance: {}, routeDistance: {}, superVertexes: {}",
-                            result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes);
+                        result.size(), distanceToFullCycle, cycleFullDistance, routeDistance, superVertexes);
                 }
                 return true;
             }
         }
         return false;
+    }
+
+    private void removeSuperVerticesAtTheStartAndEnd() {
+        // To be sure that Start vertex is not changed.
+        while (vertices.get(0).isSuperVertex() || vertices.get(vertices.size() - 1).isSuperVertex()) {
+            assertFirstAndEndCycle();
+            vertices.remove(0);
+            vertices.add(vertices.get(0));
+            assertFirstAndEndCycle();
+        }
     }
 
     private boolean isGoodDistance(double cycleDistance, double distanceToCycle, double minKM, double maxKM) {
@@ -323,6 +331,58 @@ public class Cycle {
                         subList.clear();
                         removedSomething = true;
                         break;
+                    }
+                }
+                if (removedSomething) {
+                    break;
+                }
+            }
+        }
+    }
+
+    public void removeExternalGoToAnotherRoadAndComeBack(Graph fullGraph) {
+        boolean removedSomething = true;
+        Random r = new Random(43);
+        while (removedSomething) {
+            removedSomething = false;
+            int startIndex = (int) (((double) vertices.size()) / 100 * 5);
+            int finishIndex = (int) (((double) vertices.size()) / 100 * 95);
+
+
+            int[] percentiles = {5, 10, 15, 18};
+            for (int i = startIndex; i < finishIndex; i++) {
+                for (int percent : percentiles) {
+                    int j = i + (vertices.size() / 100 * percent);
+                    if (j > vertices.size() - 1) {
+                        break;
+                    }
+                    if (j - i > vertices.size() / 100 * 20) {
+                        continue;
+                    }
+                    var v = vertices.get(i);
+                    var u = vertices.get(j);
+                    if (v.getRef() != null && v.getRef() == u.getRef()) {
+                        // check if path i..j contains a vertex on another road
+                        for (int iter = 0; iter < 5; iter++) {
+                            int middleVertex = r.nextInt(j - i) + i;
+                            var k = vertices.get(middleVertex);
+                            if (k.getRef() != null && v.getRef() != k.getRef()) {
+                                final List<Vertex> subList = vertices.subList(i + 1, j + 1);
+                                int oldSize = subList.size();
+                                subList.clear();
+
+                                final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
+                                alg.run(u);
+                                List<Vertex> vToNeighborPath = alg.getRouteFromFullGraph(u);
+                                subList.addAll(vToNeighborPath);
+                                if (oldSize == vToNeighborPath.size()) {
+                                    i = j + 1;
+                                    break;
+                                }
+                                removedSomething = true;
+                                break;
+                            }
+                        }
                     }
                 }
                 if (removedSomething) {

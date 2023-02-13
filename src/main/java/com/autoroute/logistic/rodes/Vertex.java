@@ -17,17 +17,19 @@ public class Vertex {
     private final List<Vertex> neighbors; // TODO: can be an array of ints of ids, but should be updated properly
     private double[] distances; // TODO: can be an array of ints of ids, but should be updated properly
     private boolean superVertex = false;
+    private final String ref;
 
     public Vertex(LatLon latLon) {
-        this(-1, -1, latLon);
+        this(-1, -1, latLon, null);
     }
 
-    public Vertex(int id, long identificator, LatLon latLon) {
+    public Vertex(int id, long identificator, LatLon latLon, String ref) {
         this.id = id;
         this.identificator = identificator;
         this.latLon = latLon;
         this.neighbors = new ArrayList<>(0);
         this.distances = null;
+        this.ref = ref;
     }
 
     public Vertex(Vertex old) {
@@ -37,6 +39,7 @@ public class Vertex {
         this.neighbors = old.neighbors;
         this.superVertex = old.superVertex;
         this.distances = null;
+        this.ref = old.ref;
     }
 
     public void calculateDistance() {
@@ -105,6 +108,10 @@ public class Vertex {
 
     public boolean isSynthetic() {
         return id == -1;
+    }
+
+    public String getRef() {
+        return ref;
     }
 
     @Override

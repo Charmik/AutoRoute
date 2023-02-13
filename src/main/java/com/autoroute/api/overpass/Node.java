@@ -3,12 +3,22 @@ package com.autoroute.api.overpass;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.Tag;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
-public record Node(long id, String[] keys, String[] values, LatLon latLon) {
+public class Node {
+
+    private final long id;
+    String[] keys;
+    String[] values;
+    private final LatLon latLon;
+
+    public Node(long id, String[] keys, String[] values, LatLon latLon) {
+        this.id = id;
+        this.keys = keys;
+        this.values = values;
+        this.latLon = latLon;
+    }
 
     public Map<String, String> tags() {
         Map<String, String> m = new HashMap<>();
@@ -30,18 +40,48 @@ public record Node(long id, String[] keys, String[] values, LatLon latLon) {
         StringBuilder name = new StringBuilder();
         for (Map.Entry<String, String> entry : tags.entrySet()) {
             name.append(entry.getKey())
-                .append(":")
-                .append(entry.getValue())
-                .append("\n");
+                    .append(":")
+                    .append(entry.getValue())
+                    .append("\n");
         }
         return name.toString();
     }
 
     public Set<Tag> getTags() {
         return tags().entrySet()
-            .stream()
-            .map(e -> new Tag(e.getKey(), e.getValue()))
-            .collect(Collectors.toSet());
+                .stream()
+                .map(e -> new Tag(e.getKey(), e.getValue()))
+                .collect(Collectors.toSet());
+    }
+
+    public void addTag(Tag tag) {
+        if (tag.value() == null) {
+            return;
+        }
+        if (!(tags().get(tag.key()) == null || tags().get(tag.key()).equals(tag.value()))) {
+            return;
+//            System.out.println("XXX");
+        }
+        assert tags().get(tag.key()) == null || tags().get(tag.key()).equals(tag.value());
+//        assert !Arrays.asList(keys).contains(tag.key());
+        int newSize = keys.length + 1;
+        var newKeys = new String[newSize];
+        var newValues = new String[newSize];
+        System.arraycopy(keys, 0, newKeys, 0, keys.length);
+        System.arraycopy(values, 0, newValues, 0, keys.length);
+        newKeys[newSize - 1] = tag.key();
+        newValues[newSize - 1] = tag.value();
+
+        this.keys = newKeys;
+        this.values = newValues;
+    }
+
+    public long id() {
+        return id;
+    }
+
+    public LatLon latLon() {
+        return latLon;
     }
 
     @Override
@@ -62,11 +102,11 @@ public record Node(long id, String[] keys, String[] values, LatLon latLon) {
     @Override
     public String toString() {
         return "Node{" +
-            "id=" + id +
-            "name=" + getName() +
-            ", keys=" + keys +
-            ", values=" + values +
-            ", latLon=" + latLon +
-            '}';
+                "id=" + id +
+                "name=" + getName() +
+                ", keys=" + Arrays.toString(keys) +
+                ", values=" + Arrays.toString(values) +
+                ", latLon=" + latLon +
+                '}';
     }
 }

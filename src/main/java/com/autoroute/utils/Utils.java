@@ -89,8 +89,14 @@ public class Utils {
         final List<Way> ways = r.getWays();
         sb.append(ways.size()).append("\n");
         for (Way way : ways) {
+            String ref = way.ref();
+            if (ref == null) {
+                ref = "null";
+            }
             sb
-                .append(way.hashCode())
+                .append(way.id())
+                .append(" ")
+                .append(ref)
                 .append(" ");
             for (long x : way.nodesIds()) {
                 sb.append(x).append(" ");
@@ -135,11 +141,12 @@ public class Utils {
             String str = lines.get(i);
             final String[] strs = str.split(" ");
             long id = Long.parseLong(strs[0]);
-            long[] ids = new long[strs.length - 1];
-            for (int j = 1; j < strs.length; j++) {
-                ids[j - 1] = Long.parseLong(strs[j]);
+            String ref = strs[1];
+            long[] ids = new long[strs.length - 2];
+            for (int j = 2; j < strs.length; j++) {
+                ids[j - 2] = Long.parseLong(strs[j]);
             }
-            final Way way = new Way(id, ids);
+            final Way way = new Way(id, ids, ref);
             r.add(way);
         }
         assert r.getWays().size() == waysCount;

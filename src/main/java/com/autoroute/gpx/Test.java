@@ -38,7 +38,7 @@ public class Test {
         for (int i = 0; i < points.size(); i++) {
             final WayPoint p = points.get(i);
             LatLon ll = new LatLon(p.getLatitude().doubleValue(), p.getLongitude().doubleValue());
-            Vertex v = new Vertex(1, 1, ll);
+            Vertex v = new Vertex(1, 1, ll, null);
             if (i > 0) {
                 vertices.get(i - 1).addNeighbor(v);
                 v.addNeighbor(vertices.get(i - 1));

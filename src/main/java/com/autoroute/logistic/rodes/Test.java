@@ -10,10 +10,10 @@ public class Test {
 
     public static void main(String[] args) {
         List<Vertex> l = new ArrayList<>();
-        final Vertex v1 = new Vertex(0, 0, new LatLon(1, 1));
-        final Vertex v2 = new Vertex(1, 1, new LatLon(2, 2));
-        final Vertex v3 = new Vertex(2, 2, new LatLon(3, 3));
-        final Vertex v4 = new Vertex(3, 3, new LatLon(4, 4));
+        final Vertex v1 = new Vertex(0, 0, new LatLon(1, 1), null);
+        final Vertex v2 = new Vertex(1, 1, new LatLon(2, 2), null);
+        final Vertex v3 = new Vertex(2, 2, new LatLon(3, 3), null);
+        final Vertex v4 = new Vertex(3, 3, new LatLon(4, 4), null);
         add(v1, v2);
         add(v2, v3);
         add(v3, v4);

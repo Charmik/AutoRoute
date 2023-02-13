@@ -32,7 +32,7 @@ class DijkstraCache {
         var res = cache.get(p);
         if (res != null) {
             hit++;
-            if (hit % 5000 == 0) {
+            if (hit % 50000 == 0) {
                 LOGGER.info("cache hit: {} miss: {}", hit, miss);
             }
         }
@@ -43,7 +43,7 @@ class DijkstraCache {
         // TODO: check for size?
         cache.put(p, list);
         miss++;
-        if (miss % 5000 == 0) {
+        if (miss % 50000 == 0) {
             LOGGER.info("cache hit: {} miss: {}", hit, miss);
         }
     }

@@ -2,6 +2,7 @@ package com.autoroute.api.overpass;
 
 import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.Vertex;
+import com.autoroute.osm.Tag;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
@@ -42,13 +43,22 @@ public class Mapper {
 
         LOGGER.info("Start finding neighbors");
         Long2ObjectOpenHashMap<LongArraySet> nodeIdToNeighbors = getNodeIdToNeighbors(ways);
-        if (clearResponse) { // to escape OOM
-            ways.clear();
-        }
+
         LOGGER.info("Start finding id to Node map");
         Long2ObjectOpenHashMap<Node> idToNode = getIdToNode(nodes);
+        for (Way way : ways) {
+            long[] nodesIds = way.nodesIds();
+            for (long nodesId : nodesIds) {
+                Node node = idToNode.get(nodesId);
+                if (node == null) {
+                    continue;
+                }
+                node.addTag(new Tag("ref", way.ref()));
+            }
+        }
         if (clearResponse) { // to escape OOM
             nodes.clear();
+            ways.clear();
         }
         LOGGER.info("Start creating vertices for the graph");
         Long2ObjectOpenHashMap<Vertex> idToVertex = getIdToVertex(nodeIdToNeighbors, idToNode);
@@ -99,7 +109,7 @@ public class Mapper {
         final LongArraySet neighbours = entry.getValue();
         Vertex v = idToVertex.get(nodeId);
         if (v == null) {
-            v = new Vertex(index, nodeV.id(), nodeV.latLon());
+            v = new Vertex(index, nodeV.id(), nodeV.latLon(), nodeV.tags().get("ref"));
             index++;
             idToVertex.put(nodeId, v);
         }
@@ -110,7 +120,7 @@ public class Mapper {
                 if (nodeU == null) { // nodes & ways are not equals, it means this node is too far away.
                     continue;
                 }
-                u = new Vertex(index, nodeU.id(), nodeU.latLon());
+                u = new Vertex(index, nodeU.id(), nodeU.latLon(), nodeU.tags().get("ref"));
                 index++;
                 idToVertex.put(neighbour, u);
             }
