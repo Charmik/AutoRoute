@@ -15,7 +15,7 @@ class GraphTest {
 
     private Vertex create(double lat, double lon) {
         id++;
-        return new Vertex(id, id, new LatLon(lat, lon));
+        return new Vertex(id, id, new LatLon(lat, lon), null);
     }
 
     @Test
