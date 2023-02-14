@@ -21,6 +21,7 @@ public class Cycle {
 
     private final List<Vertex> vertices;
     private @Nullable List<Vertex> compactVertices = null;
+    private final Random r = new Random(43);
 
     public Cycle(List<Vertex> vertices) {
         this.vertices = vertices;
@@ -342,7 +343,6 @@ public class Cycle {
 
     public void removeExternalGoToAnotherRoadAndComeBack(Graph fullGraph) {
         boolean removedSomething = true;
-        Random r = new Random(43);
         while (removedSomething) {
             removedSomething = false;
             int startIndex = (int) (((double) vertices.size()) / 100 * 5);
@@ -352,7 +352,7 @@ public class Cycle {
             int[] percentiles = {5, 10, 15, 18};
             for (int i = startIndex; i < finishIndex; i++) {
                 for (int percent : percentiles) {
-                    int j = i + (vertices.size() / 100 * percent);
+                    int j = i + (vertices.size() * percent / 100);
                     if (j > vertices.size() - 1) {
                         break;
                     }
@@ -364,6 +364,7 @@ public class Cycle {
                     if (v.getRef() != null && v.getRef() == u.getRef()) {
                         // check if path i..j contains a vertex on another road
                         for (int iter = 0; iter < 5; iter++) {
+                            assert j > i;
                             int middleVertex = r.nextInt(j - i) + i;
                             var k = vertices.get(middleVertex);
                             if (k.getRef() != null && v.getRef() != k.getRef()) {
