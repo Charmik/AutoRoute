@@ -22,15 +22,16 @@ public class DijkstraAlgorithm {
 
     private final Graph g;
     private final Long2DoubleOpenHashMap distances;
+    private final Long2ObjectOpenHashMap<Vertex> prev;
     private final DijkstraCache dijkstraCache;
-    private Long2ObjectOpenHashMap<Vertex> prev = null;
     private final Vertex startVertex;
 
     public DijkstraAlgorithm(Graph g, Vertex startVertex) {
         this.g = g;
-        this.startVertex = startVertex;
-        this.distances = new Long2DoubleOpenHashMap(g.size());
+        this.distances = new Long2DoubleOpenHashMap();
+        this.prev = new Long2ObjectOpenHashMap<>();
         this.dijkstraCache = DijkstraCache.getCache();
+        this.startVertex = startVertex;
     }
 
     public void run() {
@@ -44,8 +45,6 @@ public class DijkstraAlgorithm {
                 return;
             }
         }
-
-        this.prev = new Long2ObjectOpenHashMap<>();
         distances.put(startVertex.getIdentificator(), 0d);
 
         TreeSet<DijNode> queue = new TreeSet<>();

@@ -37,7 +37,7 @@ public class GraphBuilder {
                                    int maxDistanceKM) {
         LOGGER.info("Start building graph");
         LOGGER.info("Start mapToVertex");
-        Graph g = Mapper.mapToGraph(response, minDistanceKM, maxDistanceKM);
+        Graph g = Mapper.mapToGraph(response, minDistanceKM, maxDistanceKM, true);
         LOGGER.info("Finish mapToVertex");
 
 
@@ -46,8 +46,11 @@ public class GraphBuilder {
         if (Utils.isDebugging()) {
             Utils.writeDebugGPX(g.getVertices(), "graph/g1");
         }
-        LOGGER.info("Start removeCloseVertexes");
-        g.removeCloseVertexes(1, identificatorStartVertex);
+        LOGGER.info("Start createSuperVertexes, vertices: {}", g.size());
+        var startCreateSuperVertexes = System.currentTimeMillis();
+        g.createSuperVertexes(1, identificatorStartVertex);
+        LOGGER.info("createSuperVertexes took: {}", (System.currentTimeMillis() - startCreateSuperVertexes) / 1000);
+        LOGGER.info("Finished createSuperVertexes, vertices: {}", g.size());
         g.checkGraph(identificatorStartVertex);
 
         if (Utils.isDebugging()) {
@@ -65,7 +68,7 @@ public class GraphBuilder {
         } catch (IOException e) {
         }
 
-        LOGGER.info("Finish removeCloseVertexes");
+        LOGGER.info("Finish createSuperVertexes");
         LOGGER.info("graph6 has: {} vertices", g.getVertices().size());
 
         LOGGER.info("Start removeEdges");

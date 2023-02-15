@@ -18,6 +18,7 @@ public class Vertex {
     private double[] distances; // TODO: can be an array of ints of ids, but should be updated properly
     private boolean superVertex = false;
     private final String ref;
+    private boolean removed = false;
 
     public Vertex(LatLon latLon) {
         this(-1, -1, latLon, null);
@@ -112,6 +113,14 @@ public class Vertex {
 
     public String getRef() {
         return ref;
+    }
+
+    public void setRemoved() {
+        this.removed = true;
+    }
+
+    public boolean isRemoved() {
+        return this.removed;
     }
 
     @Override

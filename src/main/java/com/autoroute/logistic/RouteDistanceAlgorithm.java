@@ -7,6 +7,7 @@ import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.api.trip.services.OsrmAPI;
 import com.autoroute.logistic.rodes.*;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
+import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
 import com.autoroute.osm.LatLon;
 import com.autoroute.osm.tags.SightMapper;
 import com.autoroute.osm.tags.TagsFileReader;
@@ -73,6 +74,7 @@ public class RouteDistanceAlgorithm {
         final Future<OverpassResponse> nodesFuture = getNodesAsync(start, maxDistance);
 
         final Graph fullGraph = GraphBuilder.buildFullGraph(rodes, start, minDistance, maxDistance);
+        DijkstraCache.createCache(fullGraph);
         LOGGER.info("Start generateRoutes");
         List<Route> routes = generateRoutes(rodes, start, minDistance, maxDistance, fullGraph);
 
@@ -121,7 +123,7 @@ public class RouteDistanceAlgorithm {
         LOGGER.info("start building compact graph");
         // TODO: can we reuse fullGraph not to build Vertexes, just copy it?
         Graph compactGraph = GraphBuilder.buildGraph(rodes, start,
-                startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
+            startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
 
         var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
         fullGraph.calculateDistanceForNeighbours();
@@ -132,7 +134,6 @@ public class RouteDistanceAlgorithm {
 
         var startVertexCompactGraph = compactGraph.findNearestVertex(start);
         assert startVertexFullGraph.getIdentificator() == startVertexCompactGraph.getIdentificator();
-        compactGraph.calculateSuperVertices();
         return generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
     }
 

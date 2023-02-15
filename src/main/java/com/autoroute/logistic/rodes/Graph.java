@@ -16,7 +16,6 @@ public class Graph {
 
     private List<Vertex> vertices;
     Long2ObjectOpenHashMap<Vertex> identificatorToVertex = null;
-    private List<Vertex> superVertices = null;
     private final int maxKM;
     private final int minKM;
     private final Random random = new Random(42);
@@ -303,12 +302,6 @@ public class Graph {
 //        } while (progress);
     }
 
-    public void calculateSuperVertices() {
-        superVertices = vertices.stream()
-                .filter(Vertex::isSuperVertex)
-                .toList();
-    }
-
     public List<Vertex> getVertices() {
         return vertices;
     }
@@ -356,47 +349,16 @@ public class Graph {
     }
 
     // TODO: make parallel
-    public void removeCloseVertexes(double distance, long identificatorStartVertex) {
+    public void createSuperVertexes(double distance, long identificatorStartVertex) {
         int tries = 0;
         int iteration = 0;
+        // TODO: can be used bool[verticies.size()] additionally for fast check
+        //  cant be change to it because we need fast iteration over removed vertices as well
+        Set<Vertex> closeVertexes = new HashSet<>();
         while (true) {
             iteration++;
-            Vertex bestVertex = null;
-            int countMaxNeighbours = 0;
-
-            Vertex randomVertex = vertices.get(random.nextInt(vertices.size()));
-            final LatLon randomLatLon = randomVertex.getLatLon();
-
-            Vertex[] verticesArr = vertices.toArray(new Vertex[0]);
-            Arrays.parallelSort(verticesArr, (o1, o2) -> {
-                double distance1 = LatLon.fastDistance(o1.getLatLon(), randomLatLon);
-                double distance2 = LatLon.fastDistance(o2.getLatLon(), randomLatLon);
-                return Double.compare(distance1, distance2);
-            });
-            List<Vertex> sortVertices = Arrays.asList(verticesArr);
-
-            for (int m = 0; m < sortVertices.size(); m++) {
-                int count = 0;
-                int i = m - 1;
-                int j = m + 1;
-                final Vertex midV = sortVertices.get(m);
-                while (i >= 0
-                        && distance(sortVertices.get(i), midV) < distance) {
-                    count++;
-                    i--;
-                }
-                while (j < sortVertices.size()
-                        && distance(sortVertices.get(j), midV) < distance) {
-                    count++;
-                    j++;
-                }
-                if (count > countMaxNeighbours && midV.getIdentificator() != identificatorStartVertex) {
-                    countMaxNeighbours = count;
-                    bestVertex = midV;
-                }
-            }
-            if (bestVertex == null || countMaxNeighbours < 75) {
-                // TODO: make less? log, maybe 5 is enough?
+            Vertex v = chooseBestVertexForRemoving(distance, identificatorStartVertex);
+            if (v == null) {
                 if (tries == 50) {
                     break;
                 } else {
@@ -404,37 +366,95 @@ public class Graph {
                     continue;
                 }
             }
-            assert bestVertex.getIdentificator() != identificatorStartVertex;
+            assert v.getIdentificator() != identificatorStartVertex;
             tries = 0;
-            // LOGGER.info("delete neighbours: {} now have: {}", countMaxNeighbours, vertices.size());
-            final Vertex v = bestVertex;
             v.setSuperVertex();
-            Set<Vertex> closeVertexes = new HashSet<>();
-            for (int j = 0; j < vertices.size(); j++) {
-                Vertex u = vertices.get(j);
-                if (v.getId() == u.getId() || u.getIdentificator() == identificatorStartVertex) {
-                    continue;
-                }
-                if (distance(v, u) < distance) {
-                    closeVertexes.add(u);
-                }
-            }
-//            assert closeVertexes.size() == countMaxNeighbours; // doesn't work with sort algorithm
-            for (Vertex u : closeVertexes) {
-                for (Vertex neighbor : u.getNeighbors()) {
-                    if (v.getId() == neighbor.getId()) {
-                        continue;
-                    }
-                    neighbor.removeNeighbor(u);
-                    neighbor.addNeighbor(v);
-                    v.addNeighbor(neighbor);
-                }
-            }
-            deleteVerticesFromGraph(closeVertexes);
-            if (iteration % 50 == 0) {
+
+            findCloseVertexes(distance, identificatorStartVertex, closeVertexes, v);
+            removeNeighborsForCloseVertexes(closeVertexes, v);
+
+            if (iteration % 500 == 0) {
                 LOGGER.info("graph removed some vertexes, now: {}", vertices.size());
             }
+            deleteVerticesFromGraph(closeVertexes);
+            closeVertexes.clear();
         }
+        updateIds();
+    }
+
+    private static void removeNeighborsForCloseVertexes(Set<Vertex> closeVertexes, Vertex v) {
+        for (Vertex u : closeVertexes) {
+            for (Vertex neighbor : u.getNeighbors()) {
+                if (v.getId() == neighbor.getId()) {
+                    continue;
+                }
+                neighbor.removeNeighbor(u);
+                neighbor.addNeighbor(v);
+                v.addNeighbor(neighbor);
+            }
+        }
+    }
+
+    private void findCloseVertexes(double distance, long identificatorStartVertex, Set<Vertex> closeVertexes, Vertex v) {
+        for (int j = 0; j < vertices.size(); j++) {
+            Vertex u = vertices.get(j);
+            if (v.getId() == u.getId() || u.getIdentificator() == identificatorStartVertex) {
+                continue;
+            }
+            if (distance(v, u) < distance && !u.isRemoved()) {
+                closeVertexes.add(u);
+                u.setRemoved();
+            }
+        }
+    }
+
+    private Vertex chooseBestVertexForRemoving(double distance, long identificatorStartVertex) {
+        Vertex bestVertex = null;
+        int countMaxNeighbours = 0;
+
+        int randomIndex = random.nextInt(vertices.size());
+        while (vertices.get(randomIndex).isRemoved()) {
+            randomIndex = (randomIndex + 1) % vertices.size();
+        }
+        Vertex randomVertex = vertices.get(randomIndex);
+        final LatLon randomLatLon = randomVertex.getLatLon();
+
+        Vertex[] verticesArr = vertices.toArray(new Vertex[0]);
+        Arrays.parallelSort(verticesArr, (o1, o2) -> {
+            double distance1 = LatLon.fastDistance(o1.getLatLon(), randomLatLon);
+            double distance2 = LatLon.fastDistance(o2.getLatLon(), randomLatLon);
+            return Double.compare(distance1, distance2);
+        });
+        List<Vertex> sortVertices = Arrays.asList(verticesArr);
+
+        for (int m = 0; m < sortVertices.size(); m++) {
+            int count = 0;
+            int i = m - 1;
+            int j = m + 1;
+            final Vertex midV = sortVertices.get(m);
+            while (i >= 0
+                && distance(sortVertices.get(i), midV) < distance) {
+                if (!sortVertices.get(i).isRemoved()) {
+                    count++;
+                }
+                i--;
+            }
+            while (j < sortVertices.size()
+                && distance(sortVertices.get(j), midV) < distance) {
+                if (!sortVertices.get(j).isRemoved()) {
+                    count++;
+                }
+                j++;
+            }
+            if (count > countMaxNeighbours && midV.getIdentificator() != identificatorStartVertex) {
+                countMaxNeighbours = count;
+                bestVertex = midV;
+            }
+        }
+        if (countMaxNeighbours < 75) {
+            return null;
+        }
+        return bestVertex;
     }
 
     private void deleteVerticesFromGraph(Collection<Vertex> deleteVertices) {
@@ -448,7 +468,10 @@ public class Graph {
             v.getNeighbors().removeAll(deleteForV);
         }
         vertices.removeAll(deleteVertices);
-        updateIds();
+    }
+
+    public Vertex getVertexById(int id) {
+        return vertices.get(id);
     }
 
 }

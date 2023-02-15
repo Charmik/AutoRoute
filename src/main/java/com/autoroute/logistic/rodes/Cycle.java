@@ -52,7 +52,7 @@ public class Cycle {
             assertFirstAndEndCycle();
             removeExternalCycles(cycleDistance);
             removeExternalGoToAnotherRoadAndComeBack(fullGraph);
-            if (isInCity(countSuperVertexes()) || size() < 50) {
+            if (isInCity(countSuperVertexes()) || isSmallCycle()) {
                 return false;
             }
             var duplicateVertices = new ArrayList<>(vertices);
@@ -97,6 +97,10 @@ public class Cycle {
             }
         }
         return false;
+    }
+
+    private boolean isSmallCycle() {
+        return size() < 50;
     }
 
     private void removeSuperVerticesAtTheStartAndEnd() {
@@ -160,6 +164,11 @@ public class Cycle {
                     final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
                     alg.run(u);
                     List<Vertex> vToUPath = alg.getRouteFromFullGraph(u);
+                    // TODO: remove it - not possible if we have connected graph
+                    if (vToUPath.size() == 1) { // didn't find a route between v & u
+                        return false;
+                    }
+                    assert vToUPath.size() >= 2;
 
                     final double oldDistance = v.getDistance(u);
                     final double newDistanceOfPath = getCycleDistance(vToUPath);
@@ -170,7 +179,7 @@ public class Cycle {
                         return false;
                     }
 
-                    assert vToUPath.size() >= 2;
+
                     assert v.getIdentificator() == vToUPath.get(0).getIdentificator();
                     assert u.getIdentificator() == vToUPath.get(vToUPath.size() - 1).getIdentificator();
                     for (Vertex vertex : vToUPath) {
@@ -342,54 +351,53 @@ public class Cycle {
     }
 
     public void removeExternalGoToAnotherRoadAndComeBack(Graph fullGraph) {
-        boolean removedSomething = true;
-        while (removedSomething) {
-            removedSomething = false;
-            int startIndex = (int) (((double) vertices.size()) / 100 * 5);
-            int finishIndex = (int) (((double) vertices.size()) / 100 * 95);
+        int startIndex = (int) (((double) vertices.size()) / 100 * 5);
+        int finishIndex = (int) (((double) vertices.size()) / 100 * 95);
 
+        int[] percentiles = {5, 10, 15, 18};
+        int i = startIndex;
+        while (i < finishIndex && i < vertices.size()) {
+            for (int percent : percentiles) {
+                if (isSmallCycle()) {
+                    return;
+                }
+                int j = i + (vertices.size() * percent / 100);
+                if (j > vertices.size() - 1) {
+                    break;
+                }
+                if (j - i > vertices.size() / 100 * 20) {
+                    continue;
+                }
+                assert j > i : "i: " + i + " j: " + j;
+                var v = vertices.get(i);
+                var u = vertices.get(j);
+                if (v.getRef() != null && v.getRef() == u.getRef()) {
+                    // check if path i..j contains a vertex on another road
+                    int iterCount = 5;
+                    for (int iter = 1; iter < iterCount; iter++) {
+                        int middleVertex = (((j - i) / iterCount) * iter) + i;
+                        assert middleVertex > i : "i: " + i + " j: " + j + " percent: " + percent + " vertices.size(): " + vertices.size() + " iter: " + iter;
+                        assert middleVertex < j : "i: " + i + " j: " + j + " percent: " + percent + " vertices.size(): " + vertices.size() + " iter: " + iter;
+                        var k = vertices.get(middleVertex);
+                        if (k.getRef() != null && v.getRef() != k.getRef()) {
+                            final List<Vertex> subList = vertices.subList(i + 1, j + 1);
+                            int oldSize = subList.size();
+                            subList.clear();
 
-            int[] percentiles = {5, 10, 15, 18};
-            for (int i = startIndex; i < finishIndex; i++) {
-                for (int percent : percentiles) {
-                    int j = i + (vertices.size() * percent / 100);
-                    if (j > vertices.size() - 1) {
-                        break;
-                    }
-                    if (j - i > vertices.size() / 100 * 20) {
-                        continue;
-                    }
-                    var v = vertices.get(i);
-                    var u = vertices.get(j);
-                    if (v.getRef() != null && v.getRef() == u.getRef()) {
-                        // check if path i..j contains a vertex on another road
-                        for (int iter = 0; iter < 5; iter++) {
-                            assert j > i;
-                            int middleVertex = r.nextInt(j - i) + i;
-                            var k = vertices.get(middleVertex);
-                            if (k.getRef() != null && v.getRef() != k.getRef()) {
-                                final List<Vertex> subList = vertices.subList(i + 1, j + 1);
-                                int oldSize = subList.size();
-                                subList.clear();
-
-                                final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
-                                alg.run(u);
-                                List<Vertex> vToNeighborPath = alg.getRouteFromFullGraph(u);
-                                subList.addAll(vToNeighborPath);
-                                if (oldSize == vToNeighborPath.size()) {
-                                    i = j + 1;
-                                    break;
-                                }
-                                removedSomething = true;
+                            final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
+                            alg.run(u);
+                            List<Vertex> vToNeighborPath = alg.getRouteFromFullGraph(u);
+                            subList.addAll(vToNeighborPath);
+                            if (oldSize == vToNeighborPath.size()) {
+                                i = j + 1;
                                 break;
                             }
+                            break;
                         }
                     }
                 }
-                if (removedSomething) {
-                    break;
-                }
             }
+            i++;
         }
     }
 
