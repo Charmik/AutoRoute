@@ -43,7 +43,7 @@ public class Cycle {
         final int superVertexes = countSuperVertexes();
 
         // distance will be increased by full graph
-        if (isGoodDistance(cycleDistance, distanceToCycle, minKM * 0.7, maxKM * 0.8)
+        if (isGoodDistance(cycleDistance, distanceToCycle, minKM * 0.7, maxKM * 1.1)
             && !isInCity(superVertexes)
             && size() > 50
             // TODO: && don't cross yourself
