@@ -48,38 +48,58 @@ public class Cycle {
             && size() > 50
             // TODO: && don't cross yourself
         ) {
+            if (Utils.isDebugging()) {
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_1");
+            }
             removeSuperVerticesAtTheStartAndEnd();
+            if (!replaceSuperVertexesInPath(fullGraph)) {
+                return false;
+            }
+            assert countSuperVertexes() == 0;
+            if (Utils.isDebugging()) {
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_2");
+            }
             assertFirstAndEndCycle();
-            removeExternalCycles(cycleDistance);
+            if (Utils.isDebugging()) {
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_3");
+            }
+            // TODO: do it with full route, not with cycle
             removeExternalGoToAnotherRoadAndComeBack(fullGraph);
+            if (Utils.isDebugging()) {
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_4");
+            }
             if (isInCity(countSuperVertexes()) || isSmallCycle()) {
                 return false;
             }
-            var duplicateVertices = new ArrayList<>(vertices);
+
+            if (Utils.isDebugging()) {
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_5");
+            }
+
+            if (!replaceSuperVertexesInPath(fullGraph)) {
+                return false;
+            }
+            if (Utils.isDebugging()) {
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_6");
+            }
+
+            List<Vertex> fullGraphVertexes = new ArrayList<>();
+            for (Vertex v : vertices) {
+                Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
+                assert !vInFullGraph.isSuperVertex();
+                fullGraphVertexes.add(vInFullGraph);
+            }
+
+            Cycle fullCycle = new Cycle(fullGraphVertexes);
+            fullCycle.removeExternalCycles(getCycleDistance(vertices));
+            if (Utils.isDebugging()) {
+                Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + (result.size() + 1) + "_7");
+            }
+
+            var duplicateVertices = new ArrayList<>(fullCycle.vertices);
             var duplicateReversedVertices = new ArrayList<>(duplicateVertices);
             Collections.reverse(duplicateReversedVertices);
             if (!hasDuplicate(duplicateVertices, result) && !hasDuplicate(duplicateReversedVertices, result)) {
-                if (Utils.isDebugging()) {
-                    Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_1");
-                }
-
-                if (!replaceSuperVertexesInPath(fullGraph)) {
-                    return false;
-                }
-                if (Utils.isDebugging()) {
-                    Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_2");
-                }
-
-                List<Vertex> fullGraphVertexes = new ArrayList<>();
-                for (Vertex v : vertices) {
-                    fullGraphVertexes.add(fullGraph.findByIdentificator(v.getIdentificator()));
-                }
-
-                Cycle fullCycle = new Cycle(fullGraphVertexes);
-                fullCycle.removeExternalCycles(getCycleDistance(vertices));
-                if (Utils.isDebugging()) {
-                    Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + (result.size() + 1) + "_3");
-                }
 
                 // TODO: extract code to work only with fullCycle
                 final double distanceToFullCycle = fullCycle.minDistanceToCycle(startVertex, dijkstra);
@@ -319,6 +339,7 @@ public class Cycle {
         return superVertexes;
     }
 
+    // TODO: improve perf: go by dfs. always have prevVertex. if neighbor is visited && !prev - remove sublist. O(N)
     public void removeExternalCycles(double cycleDistance) {
         boolean removedSomething = true;
         while (removedSomething) {
