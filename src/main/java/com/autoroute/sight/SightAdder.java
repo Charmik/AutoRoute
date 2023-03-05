@@ -18,7 +18,7 @@ import java.util.Set;
 public class SightAdder {
 
     private static final Logger LOGGER = LogManager.getLogger(SightAdder.class);
-    private static final double SIGHTS_PER_KM = 0.1;
+    private static final double SIGHTS_PER_KM = 0.05;
 
     public static Route addSights(Route route, List<Sight> sights, Graph fullGraph) {
         Set<Sight> sightsInRoute = new HashSet<>();
@@ -34,7 +34,7 @@ public class SightAdder {
             if (LatLon.distanceKM(v.getLatLon(), sight.latLon()) < 0.2 && !sightsInRoute.contains(sight)) {
                 final Vertex vInFullGraph = fullGraph.findByIdentificator(v.getIdentificator());
                 final Vertex sightVertex = fullGraph.findNearestVertex(sight.latLon());
-                // TODO: use Dijkstra cache here
+
                 var dijkstra = new DijkstraAlgorithm(fullGraph, vInFullGraph);
                 dijkstra.run(sightVertex);
                 List<Vertex> routeFromVToSight = dijkstra.getRouteFromFullGraph(sightVertex);
