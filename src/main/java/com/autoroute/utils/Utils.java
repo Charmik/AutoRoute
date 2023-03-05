@@ -14,12 +14,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 public class Utils {
+
+    private static final boolean IS_DEBUGGING = "true".equals(System.getProperty("debug"));
+    private static final ExecutorService service = Executors.newFixedThreadPool(1);
 
     public static Integer parseInteger(String str) {
         try {
@@ -49,7 +55,8 @@ public class Utils {
     }
 
     public static void writeDebugGPX(List<Vertex> vertices, String name) {
-        writeGPX(GpxGenerator.generateRoute(vertices, Collections.emptySet()), "o/" + name);
+        ArrayList<Vertex> copy = new ArrayList<>(vertices);
+        service.submit(() -> writeGPX(GpxGenerator.generateRoute(copy, Collections.emptySet()), "o/" + name));
     }
 
     public static void writeDebugGPX(Route route, String name) {
@@ -115,9 +122,9 @@ public class Utils {
         OverpassResponse r = new OverpassResponse();
         final List<String> lines;
         try {
-//            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
+            lines = Files.readAllLines(Paths.get("tmp/limassol_150.txt"));
 //            lines = Files.readAllLines(Paths.get("tmp/bor_150.txt"));
-            lines = Files.readAllLines(Paths.get("tmp/amster_150.txt"));
+//            lines = Files.readAllLines(Paths.get("tmp/amster_150.txt"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -184,7 +191,6 @@ public class Utils {
     }
 
     public static boolean isDebugging() {
-        final String value = System.getProperty("debug");
-        return "true".equals(value);
+        return IS_DEBUGGING;
     }
 }
