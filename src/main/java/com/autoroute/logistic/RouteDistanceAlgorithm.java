@@ -73,10 +73,15 @@ public class RouteDistanceAlgorithm {
                                     int maxDistance) {
         final Future<OverpassResponse> nodesFuture = getNodesAsync(start, maxDistance);
 
+        long startBuildingGraph = System.currentTimeMillis();
         final Graph fullGraph = GraphBuilder.buildFullGraph(rodes, start, minDistance, maxDistance);
         DijkstraCache.createCache(fullGraph);
+        long finishBuildingGraph = System.currentTimeMillis();
+        LOGGER.info("build graph for: {}s", (finishBuildingGraph - startBuildingGraph) / 1000);
         LOGGER.info("Start generateRoutes");
         List<Route> routes = generateRoutes(rodes, start, minDistance, maxDistance, fullGraph);
+        long finishGeneratedRoutes = System.currentTimeMillis();
+        LOGGER.info("generated routes for: {}s", (finishGeneratedRoutes - finishBuildingGraph) / 1000);
 
         var goodSights = getSights(nodesFuture, start, maxDistance);
 
@@ -93,19 +98,21 @@ public class RouteDistanceAlgorithm {
         LOGGER.info("found: {} routes with good sights", routesWithSights.size());
 
         // TODO: save original index in gpx
-        routesWithSights.sort((r1, r2) -> {
-            final Set<Sight> s1 = r1.sights();
-            final Set<Sight> s2 = r2.sights();
-            int rating1 = 0;
-            for (Sight sight : s1) {
-                rating1 += sight.rating();
-            }
-            int rating2 = 0;
-            for (Sight sight : s2) {
-                rating2 += sight.rating();
-            }
-            return Integer.compare(rating2, rating1);
-        });
+        if (!Utils.isDebugging()) {
+            routesWithSights.sort((r1, r2) -> {
+                final Set<Sight> s1 = r1.sights();
+                final Set<Sight> s2 = r2.sights();
+                int rating1 = 0;
+                for (Sight sight : s1) {
+                    rating1 += sight.rating();
+                }
+                int rating2 = 0;
+                for (Sight sight : s2) {
+                    rating2 += sight.rating();
+                }
+                return Integer.compare(rating2, rating1);
+            });
+        }
 
         int routeCount = 0;
         for (Route route : routesWithSights) {
@@ -114,6 +121,8 @@ public class RouteDistanceAlgorithm {
                 routeCount + "_" + (int) (LogisticUtils.getCycleDistanceSlow(route.route())));
         }
         LOGGER.info("were: {} routes, with sights found: {}", routes.size(), routesWithSights.size());
+        long finishAddingSights = System.currentTimeMillis();
+        LOGGER.info("added sights for: {}s", (finishAddingSights - finishGeneratedRoutes) / 1000);
         return routesWithSights;
     }
 
@@ -122,14 +131,13 @@ public class RouteDistanceAlgorithm {
         final Vertex startVertexFullGraph = fullGraph.findNearestVertex(start);
         LOGGER.info("start building compact graph");
         // TODO: can we reuse fullGraph not to build Vertexes, just copy it?
-        Graph compactGraph = GraphBuilder.buildGraph(rodes, start,
-            startVertexFullGraph.getIdentificator(), minDistance, maxDistance);
+        Graph compactGraph = GraphBuilder.buildCompactGraph(rodes, start,
+            startVertexFullGraph.getIdentificator(), minDistance, maxDistance, fullGraph);
 
         var dijkstra = new DijkstraAlgorithm(fullGraph, startVertexFullGraph);
         fullGraph.calculateDistanceForNeighbours();
         fullGraph.buildIdentificatorToVertexMap();
         dijkstra.run();
-        compactGraph.setFullGraph(fullGraph);
         compactGraph.calculateDistanceForNeighbours();
 
         var startVertexCompactGraph = compactGraph.findNearestVertex(start);
@@ -170,6 +178,7 @@ public class RouteDistanceAlgorithm {
             start.lat() + diffDegree,
             start.lon() + diffDegree
         );
+        LOGGER.info("getNodesAsync box: {}", box);
         return OSM_POOL.submit(() -> {
             for (int i = 0; i < 5; i++) {
                 OverpassResponse response = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
@@ -184,22 +193,22 @@ public class RouteDistanceAlgorithm {
     }
 
     // TODO: make parallel, 1 dfs for every thread. duplicates in merge-thread once again?
-    private static List<Route> generateRoutesFromGraph(Graph g,
+    private static List<Route> generateRoutesFromGraph(Graph compactGraph,
                                                        Vertex startVertex,
                                                        DijkstraAlgorithm dijkstra) {
-        LOGGER.info("Final graph has: {} vertices", g.getVertices().size());
+        LOGGER.info("Final graph has: {} vertices", compactGraph.getVertices().size());
 
         int tries = 0;
         final List<Cycle> cycles = new ArrayList<>();
-        g.calculateDistanceForNeighbours();
-        g.buildIdentificatorToVertexMap();
+        compactGraph.calculateDistanceForNeighbours();
+        compactGraph.buildIdentificatorToVertexMap();
         int newSize;
         List<Route> routes = new ArrayList<>();
 
         long lastTimeFoundNewRouteTimestamp = System.currentTimeMillis();
         do {
             int oldSize = cycles.size();
-            g.findAllCycles(startVertex, cycles, dijkstra);
+            compactGraph.findAllCycles(startVertex, cycles, dijkstra);
 
             newSize = cycles.size();
             if (newSize > oldSize) {
@@ -219,6 +228,14 @@ public class RouteDistanceAlgorithm {
                             closestVertex = v;
                             indexClosestVertex = j;
                         }
+                        /*
+                        This assertion fails because we have vertexes from different graphs. change all  of them from fullGraph?
+                        if (j > 0) {
+                            Vertex u = cycle.getVertices().get(j - 1);
+                            assert u.containsNeighbor(v) : "route: " + (i + 1);
+                            assert v.containsNeighbor(u) : "route: " + (i + 1);
+                        }
+                        */
                     }
                     assert closestVertex != null;
                     assert indexClosestVertex != -1;
@@ -247,9 +264,6 @@ public class RouteDistanceAlgorithm {
             tries++;
             final long now = System.currentTimeMillis();
             int maxTime = MAX_FINDING_TIME;
-            if (Utils.isDebugging()) {
-                maxTime /= 6;
-            }
             if (now - lastTimeFoundNewRouteTimestamp > maxTime) {
                 LOGGER.info("couldn't find a new route for more then: {} seconds", maxTime / 1000);
                 break;

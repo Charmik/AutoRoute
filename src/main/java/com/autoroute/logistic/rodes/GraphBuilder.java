@@ -30,16 +30,17 @@ public class GraphBuilder {
     }
 
     // TODO: add timing stats and print after building
-    public static Graph buildGraph(OverpassResponse response,
-                                   LatLon start,
-                                   long identificatorStartVertex,
-                                   int minDistanceKM,
-                                   int maxDistanceKM) {
+    public static Graph buildCompactGraph(OverpassResponse response,
+                                          LatLon start,
+                                          long identificatorStartVertex,
+                                          int minDistanceKM,
+                                          int maxDistanceKM,
+                                          Graph fullGraph) {
         LOGGER.info("Start building graph");
         LOGGER.info("Start mapToVertex");
         Graph g = Mapper.mapToGraph(response, minDistanceKM, maxDistanceKM, true);
         LOGGER.info("Finish mapToVertex");
-
+        g.setFullGraph(fullGraph);
 
         generalPhases(g, start, maxDistanceKM, identificatorStartVertex, 0.1);
 

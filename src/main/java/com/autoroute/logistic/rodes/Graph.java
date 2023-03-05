@@ -224,6 +224,10 @@ public class Graph {
         this.fullGraph = fullGraph;
     }
 
+    public boolean isFullGraph() {
+        return fullGraph == null;
+    }
+
     static class BfsResult {
         int[] distance;
         Vertex[] parents;
@@ -350,6 +354,7 @@ public class Graph {
 
     // TODO: make parallel
     public void createSuperVertexes(double distance, long identificatorStartVertex) {
+        assert !isFullGraph();
         int tries = 0;
         int iteration = 0;
         // TODO: can be used bool[verticies.size()] additionally for fast check

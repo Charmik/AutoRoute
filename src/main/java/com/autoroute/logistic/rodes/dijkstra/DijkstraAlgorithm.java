@@ -20,14 +20,15 @@ public class DijkstraAlgorithm {
 
     private static final Logger LOGGER = LogManager.getLogger(DijkstraAlgorithm.class);
 
-    private final Graph g;
+    private final Graph fullGraph;
     private final Long2DoubleOpenHashMap distances;
     private final Long2ObjectOpenHashMap<Vertex> prev;
     private final DijkstraCache dijkstraCache;
     private final Vertex startVertex;
 
-    public DijkstraAlgorithm(Graph g, Vertex startVertex) {
-        this.g = g;
+    public DijkstraAlgorithm(Graph fullGraph, Vertex startVertex) {
+        assert fullGraph.isFullGraph();
+        this.fullGraph = fullGraph;
         this.distances = new Long2DoubleOpenHashMap();
         this.prev = new Long2ObjectOpenHashMap<>();
         this.dijkstraCache = DijkstraCache.getCache();
@@ -67,7 +68,7 @@ public class DijkstraAlgorithm {
     private boolean dijkstraIteration(@Nullable Vertex finish, TreeSet<DijNode> queue) {
         final DijNode node = queue.pollFirst();
         assert node != null;
-        Vertex v = g.findByIdentificator(node.identificator);
+        Vertex v = fullGraph.findByIdentificator(node.identificator);
 
         for (Vertex u : v.getNeighbors()) {
             assert u.containsNeighbor(v);
@@ -118,12 +119,11 @@ public class DijkstraAlgorithm {
         List<Vertex> cacheResult = dijkstraCache.get(p);
         if (cacheResult != null) {
             assert cacheResult.get(0).getIdentificator() == startVertex.getIdentificator();
-            assert cacheResult.get(cacheResult.size() -1).getIdentificator() == u.getIdentificator();
+            assert cacheResult.get(cacheResult.size() - 1).getIdentificator() == u.getIdentificator();
             return new ArrayList<>(cacheResult);
         }
 
-        assert g.getVertices().contains(u);
-        final Vertex newU = g.findNearestVertex(u.getLatLon());
+        final Vertex newU = fullGraph.findByIdentificator(u.getIdentificator());
         assert u.getIdentificator() == newU.getIdentificator();
         u = newU;
 
@@ -142,7 +142,7 @@ public class DijkstraAlgorithm {
         }
         Collections.reverse(route);
         assert route.get(0).getIdentificator() == startVertex.getIdentificator();
-        assert route.get(route.size() -1).getIdentificator() == u.getIdentificator();
+        assert route.get(route.size() - 1).getIdentificator() == u.getIdentificator();
 
         dijkstraCache.put(p, Collections.unmodifiableList(route));
         return new ArrayList<>(route);
