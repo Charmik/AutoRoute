@@ -71,7 +71,10 @@ public class RouteDistanceAlgorithm {
                                     LatLon start,
                                     int minDistance,
                                     int maxDistance) {
-        final Future<OverpassResponse> nodesFuture = getNodesAsync(start, maxDistance);
+        var tagsReader = new TagsFileReader();
+        tagsReader.readTags();
+
+        final Future<OverpassResponse> nodesFuture = getNodesAsync(start, maxDistance, tagsReader);
 
         long startBuildingGraph = System.currentTimeMillis();
         final Graph fullGraph = GraphBuilder.buildFullGraph(rodes, start, minDistance, maxDistance);
@@ -83,7 +86,7 @@ public class RouteDistanceAlgorithm {
         long finishGeneratedRoutes = System.currentTimeMillis();
         LOGGER.info("generated routes for: {}s", (finishGeneratedRoutes - finishBuildingGraph) / 1000);
 
-        var goodSights = getSights(nodesFuture, start, maxDistance);
+        var goodSights = getSights(nodesFuture, start, tagsReader);
 
         List<Route> routesWithSights = new ArrayList<>();
         for (int i = 0; i < routes.size(); i++) {
@@ -145,7 +148,7 @@ public class RouteDistanceAlgorithm {
         return generateRoutesFromGraph(compactGraph, startVertexCompactGraph, dijkstra);
     }
 
-    private List<Sight> getSights(Future<OverpassResponse> nodesFuture, LatLon start, int maxDistance) {
+    private List<Sight> getSights(Future<OverpassResponse> nodesFuture, LatLon start, TagsFileReader tagsReader) {
         LOGGER.info("waiting nodes from async query");
         OverpassResponse overpassResponse;
         try {
@@ -155,7 +158,7 @@ public class RouteDistanceAlgorithm {
             return Collections.emptyList();
         }
         LOGGER.info("found: {} original sights", overpassResponse.getNodes().size());
-        var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes());
+        var sights = SightMapper.getSightsFromNodes(overpassResponse.getNodes(), tagsReader);
         sights.sort(Comparator.comparingInt(Sight::rating).reversed());
         LOGGER.info("found: {} sorted sights", overpassResponse.getNodes().size());
         var goodSights = new ArrayList<>(sights.stream()
@@ -168,9 +171,7 @@ public class RouteDistanceAlgorithm {
     }
 
     @NotNull
-    private Future<OverpassResponse> getNodesAsync(LatLon start, int maxDistance) {
-        var tagsReader = new TagsFileReader();
-        tagsReader.readTags();
+    private Future<OverpassResponse> getNodesAsync(LatLon start, int maxDistance, TagsFileReader tagsReader) {
         double diffDegree = ((double) maxDistance / Constants.KM_IN_ONE_DEGREE) / 2;
         final Box box = new Box(
             start.lat() - diffDegree,
@@ -183,6 +184,7 @@ public class RouteDistanceAlgorithm {
             for (int i = 0; i < 5; i++) {
                 OverpassResponse response = overPassAPI.getNodesInBoxByTags(box, tagsReader.getTags());
                 if (!response.getNodes().isEmpty()) {
+                    LOGGER.info("got nodes by async query");
                     return response;
                 }
                 LOGGER.info("didn't find any sights, try again: {}", i);

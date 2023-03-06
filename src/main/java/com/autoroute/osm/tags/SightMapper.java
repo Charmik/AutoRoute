@@ -10,6 +10,8 @@ import java.util.Set;
 
 public class SightMapper {
 
+    private static final String DRINKING_WATER = "drinking_water";
+
     // TODO: iterate over TagsReader?
     private static final List<String> NAME_TAGS = List.of(
         "name:en",
@@ -24,10 +26,10 @@ public class SightMapper {
         "waterway"
     );
 
-    public static List<Sight> getSightsFromNodes(List<Node> nodes) {
+    public static List<Sight> getSightsFromNodes(List<Node> nodes, TagsFileReader tagsReader) {
         List<Sight> sights = new ArrayList<>(nodes.size());
         for (Node node : nodes) {
-            int rating = getRating(node);
+            int rating = getRating(node, tagsReader);
             final String fee = node.tags().get("fee");
             if (node.tags().containsKey("charge") || ("yes".equals(fee))) {
                 rating = 0;
@@ -37,7 +39,10 @@ public class SightMapper {
             if (name == null) {
                 final boolean isDrinkNode = node.tags().entrySet()
                     .stream()
-                    .anyMatch(e -> isDrinkingWater(new Tag(e.getKey(), e.getValue())));
+                    .anyMatch(e -> {
+                        Tag tag = new Tag(e.getKey(), e.getValue());
+                        return isDrinkingWater(tag) && tagsReader.getTags().contains(tag);
+                    });
                 if (isDrinkNode) {
                     name = "drink";
                 }
@@ -60,11 +65,13 @@ public class SightMapper {
         return null;
     }
 
-    private static int getRating(Node node) {
+    private static int getRating(Node node, TagsFileReader tagsReader) {
         final Set<Tag> tags = node.getTags();
         int rating = 0;
         for (Tag tag : tags) {
-            rating += tagToRating(tag);
+            if (tagsReader.getTags().contains(tag)) {
+                rating += tagToRating(tag);
+            }
         }
         return rating;
     }
@@ -90,11 +97,11 @@ public class SightMapper {
         final String key = tag.key();
         final String value = tag.value();
         boolean is_drinking =
-            "drinking_water".equals(key) && "yes".equals(value);
+            DRINKING_WATER.equals(key) && "yes".equals(value);
         is_drinking = is_drinking |
             "amenity".equals(key) && "water_point".equals(value);
         is_drinking = is_drinking |
-            "amenity".equals(key) && "drinking_water".equals(value);
+            "amenity".equals(key) && DRINKING_WATER.equals(value);
         return is_drinking;
     }
 }

@@ -18,11 +18,14 @@ import java.util.Set;
 public class SightAdder {
 
     private static final Logger LOGGER = LogManager.getLogger(SightAdder.class);
-    private static final double SIGHTS_PER_KM = 0.05;
+    private static final double MIN_SIGHTS_PER_KM = 0.05;
+    private static final double MAX_SIGHTS_PER_KM = 0.1;
 
     public static Route addSights(Route route, List<Sight> sights, Graph fullGraph) {
         Set<Sight> sightsInRoute = new HashSet<>();
-        int maxSights = (int) (route.routeDistance() * SIGHTS_PER_KM);
+        int minSights = (int) (route.routeDistance() * MIN_SIGHTS_PER_KM);
+        int maxSights = (int) (route.routeDistance() * MAX_SIGHTS_PER_KM);
+
         for (Sight sight : sights) {
             if (sightsInRoute.size() > maxSights) {
                 break;
@@ -64,6 +67,9 @@ public class SightAdder {
                 sightsInRoute.add(sight);
                 // sights.remove(sight); // uncomment if we want unique sights
             }
+        }
+        if (sightsInRoute.size() < minSights) {
+            sightsInRoute.clear();
         }
         // TODO: if we already have another route which include all sights from this route - skip this one?
         return new Route(route.route(), sightsInRoute, LogisticUtils.getCycleDistanceSlow(route.route()));
