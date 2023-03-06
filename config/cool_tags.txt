@@ -1,5 +1,5 @@
 amenity fountain
-amenity drinking_water
+--amenity drinking_water
 amenity kneipp_water_cure
 amenity monastery
 amenity place_of_worship
