@@ -1,0 +1,12 @@
+-) find areas of cities & exclude routes which > X % in the city
+-) daemon-thread to cleanup old routes/*
+-) add rating/likes/etc (google.maps/foursquare?) for sights
+-) refactoring: extract every step from Cycle class to separate class which implements general interface of improving the cycle/route
+-) performance:
+    -) cache for graphs (roads/nodes)
+    -) implement https://en.wikipedia.org/wiki/Quadtree for fast finding super-vertexes for big cities
+    -) optimize removeExternalCycles for O(N)
+
+
+-) build routes where you haven't been - heatmap - take from strava.
+-) build routes where you can win prize place on the segment
