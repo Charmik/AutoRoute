@@ -125,13 +125,20 @@ public class Vertex {
 
     @Override
     public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
         Vertex vertex = (Vertex) o;
-        return id == vertex.id;
+
+        if (id != vertex.id) return false;
+        return identificator == vertex.identificator;
     }
 
     @Override
     public int hashCode() {
-        return id;
+        int result = id;
+        result = 31 * result + (int) (identificator ^ (identificator >>> 32));
+        return result;
     }
 
     @Override
