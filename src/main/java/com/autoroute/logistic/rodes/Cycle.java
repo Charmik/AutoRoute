@@ -4,15 +4,14 @@ import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.osm.LatLon;
 import com.autoroute.utils.Utils;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
+
 
 public class Cycle {
 
@@ -32,10 +31,12 @@ public class Cycle {
         this.compactVertices = compactVertices;
     }
 
+    // TODO: try cache with bad cycles? start,finish,distance - key?
     public boolean tryAddCycle(Graph fullGraph, Vertex startVertex, List<Cycle> result,
                                DijkstraAlgorithm dijkstra, int minKM, int maxKM) {
-        assertFirstAndEndCycle();
         DEBUG_COUNTER++;
+        assertFirstAndEndCycle();
+        assert !hasDuplicateVertexes();
 
         final double distanceToCycle = minDistanceToCycle(startVertex, dijkstra);
         final double cycleDistance = getCycleDistance(vertices);
@@ -52,35 +53,56 @@ public class Cycle {
                 Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_1");
             }
             removeSuperVerticesAtTheStartAndEnd();
-            if (!replaceSuperVertexesInPath(fullGraph)) {
-                return false;
-            }
-            assert countSuperVertexes() == 0;
             if (Utils.isDebugging()) {
                 Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_2");
             }
-            assertFirstAndEndCycle();
+            assert !hasDuplicateVertexes();
+
+            if (tooLongSuperVertexesDistance(cycleDistance)) {
+                return false;
+            }
+
+            if (!replaceSuperVertexesInPath(fullGraph)) {
+                return false;
+            }
+            removeExternalCycles(getCycleDistance(vertices));
+            if (hasDuplicateVertexes()) { // some weird cycle. can be debugged but easily just to skip to weird routes.
+                return false;
+            }
+            assert !hasDuplicateVertexes();
+
+            assert countSuperVertexes() == 0;
             if (Utils.isDebugging()) {
                 Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_3");
             }
-            // TODO: do it with full route, not with cycle
-            removeExternalGoToAnotherRoadAndComeBack(fullGraph);
+            assertFirstAndEndCycle();
             if (Utils.isDebugging()) {
                 Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_4");
+            }
+
+            Utils.writeDebugGPX(vertices, "debug/" + "000");
+            removeExternalGoToAnotherRoadAndComeBack(fullGraph); // TODO: do it with full route, not with cycle
+            Utils.writeDebugGPX(vertices, "debug/" + "111");
+//            assert !hasDuplicateVertexes(); TODO: should this assert be here?
+
+            if (Utils.isDebugging()) {
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_5");
             }
             if (isInCity(countSuperVertexes()) || isSmallCycle()) {
                 return false;
             }
 
             if (Utils.isDebugging()) {
-                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_5");
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_6");
             }
 
             if (!replaceSuperVertexesInPath(fullGraph)) {
                 return false;
             }
+//            assert !hasDuplicateVertexes(); TODO: should this assert be here?
+
             if (Utils.isDebugging()) {
-                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_6");
+                Utils.writeDebugGPX(vertices, "cycles/" + (result.size() + 1) + "_7");
             }
 
             List<Vertex> fullGraphVertexes = new ArrayList<>();
@@ -92,8 +114,10 @@ public class Cycle {
 
             Cycle fullCycle = new Cycle(fullGraphVertexes);
             fullCycle.removeExternalCycles(getCycleDistance(vertices));
+            // TODO: choose the best remove method
+//            fullCycle.removeExternalCycles2(getCycleDistance(vertices));
             if (Utils.isDebugging()) {
-                Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + (result.size() + 1) + "_7");
+                Utils.writeDebugGPX(fullCycle.vertices, "cycles/" + (result.size() + 1) + "_8");
             }
 
             var duplicateVertices = new ArrayList<>(fullCycle.vertices);
@@ -119,6 +143,18 @@ public class Cycle {
         return false;
     }
 
+    private boolean tooLongSuperVertexesDistance(double cycleDistance) {
+        double superDistance = 0;
+        for (int i = 1; i < vertices.size(); i++) {
+            Vertex v = vertices.get(i - 1);
+            Vertex u = vertices.get(i);
+            if (v.isSuperVertex() || u.isSuperVertex()) {
+                superDistance += LatLon.distanceKM(v.getLatLon(), u.getLatLon());
+            }
+        }
+        return superDistance > (cycleDistance / 100 * 50);
+    }
+
     private boolean isSmallCycle() {
         return size() < 50;
     }
@@ -139,7 +175,7 @@ public class Cycle {
 //            && (cycleDistance > minKM / 2)
             && routeDistance >= minKM
             && routeDistance <= maxKM
-            && (cycleDistance > routeDistance * 0.5)
+            && (cycleDistance > routeDistance * 0.3)
         ) {
             return true;
         }
@@ -209,8 +245,12 @@ public class Cycle {
                     for (Vertex vertex : vToUPath) {
                         assert !vertex.isSuperVertex();
                     }
+                    assert !hasDuplicateVertexes(vToUPath);
                     vertices.subList(startIndex, finishIndex).clear();
                     vertices.addAll(startIndex, vToUPath);
+                     /*
+                      It's possible to have duplicate vertex here, but it should be fixed by removeExternalCycles
+                     */
                     progress = true;
                 }
             }
@@ -344,11 +384,9 @@ public class Cycle {
         boolean removedSomething = true;
         while (removedSomething) {
             removedSomething = false;
-            int startIndex = (int) (((double) vertices.size()) / 100 * 5);
-            int finishIndex = (int) (((double) vertices.size()) / 100 * 95);
 
-            for (int i = startIndex; i <= finishIndex; i++) {
-                for (int j = i + 3; j <= finishIndex; j++) {
+            for (int i = 1; i < vertices.size() - 1; i++) {
+                for (int j = i + 3; j < vertices.size() - 1; j++) {
                     final Vertex v = vertices.get(i);
                     final Vertex u = vertices.get(j);
                     // TODO: if they are very close by distance - try to merge it with dijkstra?
@@ -368,6 +406,49 @@ public class Cycle {
                     break;
                 }
             }
+        }
+    }
+
+    /**
+     * dfs by loop. We are at edge v -> u. Iterate over neighbors (n) at u. If n is not v and n is visited - we have a cycle.
+     * Then we can remove (v..u]
+     * Route can contains duplicates (path from start & to start point)
+     */
+    public void removeExternalCycles2(double cycleDistance) {
+        assert vertices.size() > 50;
+
+        int startIndex = (int) (((double) vertices.size()) / 100 * 5);
+        int finishIndex = (int) (((double) vertices.size()) / 100 * 95);
+        int i = startIndex;
+        Long2ObjectOpenHashMap<Vertex> prev = new Long2ObjectOpenHashMap<>();
+        while (i < vertices.size()) {
+            Vertex v = vertices.get(i - 1);
+            Vertex u = vertices.get(i);
+
+            Vertex prevU = prev.get(u.getIdentificator());
+            if (prevU != null) {
+                assert prevU.getIdentificator() != v.getIdentificator();
+                // delete (prevU..v]
+                // TODO: save the index in map
+                int prevUIndex = -1;
+                for (int k = 0; k < vertices.size(); k++) {
+                    if (vertices.get(k).getIdentificator() == prevU.getIdentificator()) {
+                        prevUIndex = k;
+                        break;
+                    }
+                }
+                assert prevUIndex != -1;
+                List<Vertex> subList = vertices.subList(prevUIndex, i);
+                subList.clear();
+                prev.clear();
+                i = startIndex;
+            }
+
+            prev.put(u.getIdentificator(), v);
+//            for (Vertex vNeighbor : v.getNeighbors()) {
+//                prev.put(v.getIdentificator(), vNeighbor);
+//            }
+            i++;
         }
     }
 
@@ -401,14 +482,18 @@ public class Cycle {
                         assert middleVertex < j : "i: " + i + " j: " + j + " percent: " + percent + " vertices.size(): " + vertices.size() + " iter: " + iter;
                         var k = vertices.get(middleVertex);
                         if (k.getRef() != null && v.getRef() != k.getRef()) {
-                            final List<Vertex> subList = vertices.subList(i + 1, j + 1);
+                            final List<Vertex> subList = vertices.subList(i, j + 1);
                             int oldSize = subList.size();
                             subList.clear();
 
                             final DijkstraAlgorithm alg = new DijkstraAlgorithm(fullGraph, v);
                             alg.run(u);
                             List<Vertex> vToNeighborPath = alg.getRouteFromFullGraph(u);
+                            assert !hasDuplicateVertexes(vToNeighborPath);
                             subList.addAll(vToNeighborPath);
+
+//                            assert !hasDuplicateVertexes(); TODO: should be here?
+
                             if (oldSize == vToNeighborPath.size()) {
                                 i = j + 1;
                                 break;
@@ -420,6 +505,25 @@ public class Cycle {
             }
             i++;
         }
+    }
+
+    // TODO: check both id & identificators?
+    private boolean hasDuplicateVertexes() {
+        return hasDuplicateVertexes(vertices);
+    }
+
+    private static boolean hasDuplicateVertexes(List<Vertex> vertices) {
+        Map<Vertex, Integer> set = new HashMap<>(vertices.size());
+        for (int i = 0; i < vertices.size() - 1; i++) {
+            Vertex v = vertices.get(i);
+            Integer prevIndex = set.get(v);
+//            assert prevIndex == null : "index: " + i + " prevIndex: " + prevIndex + " size: " + vertices.size();
+            if (prevIndex != null) {
+                return true;
+            }
+            set.put(v, i);
+        }
+        return false;
     }
 
     boolean containsLatLon(LatLon latLon, double distance) {
