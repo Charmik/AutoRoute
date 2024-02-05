@@ -54,8 +54,9 @@ public class RouteDistanceAlgorithm {
             overPassAPI.getRodes(new LatLon(start.lat(), start.lon()), maxDistanceKM * 1000 / 2);
 
         // for fast testing only
-//         Utils.writeVertecesToFile(rodes);
-//        final OverpassResponse rodes = Utils.readVertices(new LatLon(34.711433, 33.131185), 60);
+//        Utils.writeVertecesToFile(rodes);
+//        final OverpassResponse rodes = Utils.readVertices(new LatLon(start.lat(), start.lon()), 60);
+
         return buildRoutes(rodes, start, minDistanceKM, maxDistanceKM);
     }
 
