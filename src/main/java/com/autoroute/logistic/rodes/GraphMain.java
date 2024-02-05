@@ -16,7 +16,7 @@ public class GraphMain {
 
     private final static LatLon[] points = {
 //        new LatLon(59.897299, 29.078159), // bor
-        new LatLon(34.711433, 33.131185), // cyprus
+        new LatLon(34.711433, 33.131185), // limassol
 //        new LatLon(52.335352, 4.887436), // amsterdam
 //        new LatLon(35.430590, -83.075770), // summer home
 //        new LatLon(54.851016, 83.100406), // novosib
@@ -25,11 +25,12 @@ public class GraphMain {
     public static void main(String[] args) throws IOException {
         final long startTime = System.currentTimeMillis();
         LOGGER.info("Start process request");
-        final int MIN_KM = 40;
-        final int MAX_KM = 100;
+        final int MIN_KM = 60;
+//        final int MIN_KM = 100;
+//        final int MAX_KM = 70;
+        final int MAX_KM = 80;
 
         for (LatLon start : points) {
-
             Files.walk(Paths.get("o"), 10)
                 .filter(e -> e.toString().endsWith(".gpx"))
                 .forEach(e -> e.toFile().delete());
@@ -37,7 +38,7 @@ public class GraphMain {
             final RouteDistanceAlgorithm alg = new RouteDistanceAlgorithm(start, MAX_KM, "charm");
             final var r = alg.buildRoutes(start, MIN_KM, MAX_KM, new PointVisiter(), 1);
             final long finishTime = System.currentTimeMillis();
-            LOGGER.info((finishTime - startTime) / 1000 + " seconds " + r.size());
+            LOGGER.info((finishTime - startTime) / 1000 + " seconds, sights: " + r.size());
         }
         System.exit(0);
     }
