@@ -56,7 +56,11 @@ public class Utils {
 
     public static void writeDebugGPX(List<Vertex> vertices, String name) {
         ArrayList<Vertex> copy = new ArrayList<>(vertices);
-        service.submit(() -> writeGPX(GpxGenerator.generateRoute(copy, Collections.emptySet()), "o/" + name));
+        if (isDebugging()) {
+            writeGPX(GpxGenerator.generateRoute(copy, Collections.emptySet()), "o/" + name);
+        } else {
+            service.submit(() -> writeGPX(GpxGenerator.generateRoute(copy, Collections.emptySet()), "o/" + name));
+        }
     }
 
     public static void writeDebugGPX(Route route, String name) {
