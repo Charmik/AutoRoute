@@ -40,7 +40,7 @@ public class Graph {
                 assert !u.getNeighbors().contains(u);
             }
         }
-        assert vertices.stream().filter(e -> e.getIdentificator() == identificatorStartVertex).toList().size() == 1;
+        assert vertices.stream().filter(e -> e.getIdentificator() == identificatorStartVertex).count() == 1;
     }
 
     public void addEdgesFromStartPoint(Vertex startVertex, double minDistance) {
