@@ -34,10 +34,8 @@ public class RouteDistanceAlgorithm {
     private static final ExecutorService OSM_POOL = Executors.newFixedThreadPool(CORES);
 
     private final OverPassAPI overPassAPI;
-    private final String user; // TODO: delete this field and move logic inside PointVisitor
 
     public RouteDistanceAlgorithm(LatLon start, int maxDistanceKM, String user) {
-        this.user = user;
         this.overPassAPI = new OverPassAPI(start, maxDistanceKM);
     }
 
