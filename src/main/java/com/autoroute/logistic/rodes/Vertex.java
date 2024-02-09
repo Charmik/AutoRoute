@@ -12,6 +12,7 @@ public class Vertex {
     private static final Logger LOGGER = LogManager.getLogger(Vertex.class);
 
     private int id; // 0..N
+    // unique identifier for every vertex. id in overpass.
     private final long identificator;
     private final LatLon latLon;
     private final List<Vertex> neighbors; // TODO: can be an array of ints of ids, but should be updated properly

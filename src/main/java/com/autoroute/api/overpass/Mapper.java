@@ -30,13 +30,14 @@ public class Mapper {
     }
 
     public static Graph mapToGraph(OverpassResponse r, int minDistance, int maxDistance, boolean clearResponse) {
-        List<Vertex> vertices = getVertices(r, clearResponse);
+        boolean isBig = r.getNodes().size() > 250_000;
+        List<Vertex> vertices = getVertices(r, clearResponse, isBig);
         LOGGER.info("Start build graph");
         return new Graph(vertices, minDistance, maxDistance);
     }
 
     @NotNull
-    private static List<Vertex> getVertices(OverpassResponse r, boolean clearResponse) {
+    static List<Vertex> getVertices(OverpassResponse r, boolean clearResponse, boolean isBig) {
         final List<Node> nodes = r.getNodes();
         final List<Way> ways = r.getWays();
         LOGGER.info("generate Vertexes, node: {}, ways: {}", nodes.size(), ways.size());
@@ -61,7 +62,7 @@ public class Mapper {
             ways.clear();
         }
         LOGGER.info("Start creating vertices for the graph");
-        Long2ObjectOpenHashMap<Vertex> idToVertex = getIdToVertex(nodeIdToNeighbors, idToNode);
+        Long2ObjectOpenHashMap<Vertex> idToVertex = getIdToVertex(nodeIdToNeighbors, idToNode, isBig);
 
         List<Vertex> l = new ArrayList<>(idToVertex.values());
         for (Vertex v : l) {
@@ -72,8 +73,9 @@ public class Mapper {
     }
 
     @NotNull
-    private static Long2ObjectOpenHashMap<Vertex> getIdToVertex(Long2ObjectOpenHashMap<LongArraySet> nodeIdToNeighbors, Long2ObjectOpenHashMap<Node> idToNode) {
-        boolean isBig = nodeIdToNeighbors.size() > 500_000;
+    private static Long2ObjectOpenHashMap<Vertex> getIdToVertex(Long2ObjectOpenHashMap<LongArraySet> nodeIdToNeighbors,
+                                                                Long2ObjectOpenHashMap<Node> idToNode, boolean isBig)
+    {
         Long2ObjectOpenHashMap<Vertex> idToVertex = new Long2ObjectOpenHashMap<>();
         int index = 0;
         LOGGER.info("graph is big: {}", isBig);
@@ -96,11 +98,10 @@ public class Mapper {
         return idToVertex;
     }
 
-    private static int createVertexForNode(
-            Long2ObjectOpenHashMap<Node> idToNode,
-            Long2ObjectOpenHashMap<Vertex> idToVertex,
-            int index,
-            Long2ObjectMap.Entry<LongArraySet> entry) {
+    private static int createVertexForNode(Long2ObjectOpenHashMap<Node> idToNode,
+                                           Long2ObjectOpenHashMap<Vertex> idToVertex, int index,
+                                           Long2ObjectMap.Entry<LongArraySet> entry)
+    {
         final long nodeId = entry.getLongKey();
         Node nodeV = idToNode.get(nodeId);
         if (nodeV == null) { // nodes & ways are not equals, it means this node is too far away.

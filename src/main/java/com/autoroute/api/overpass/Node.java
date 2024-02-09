@@ -60,7 +60,6 @@ public class Node {
         }
         if (!(tags().get(tag.key()) == null || tags().get(tag.key()).equals(tag.value()))) {
             return;
-//            System.out.println("XXX");
         }
         assert tags().get(tag.key()) == null || tags().get(tag.key()).equals(tag.value());
 //        assert !Arrays.asList(keys).contains(tag.key());
