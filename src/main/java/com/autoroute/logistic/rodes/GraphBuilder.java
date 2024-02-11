@@ -72,7 +72,6 @@ public class GraphBuilder {
         LOGGER.info("Finish createSuperVertexes");
         LOGGER.info("graph6 has: {} vertices", g.getVertices().size());
 
-        LOGGER.info("Start removeEdges");
         g.removeEdges(identificatorStartVertex);
         if (Utils.isDebugging()) {
             Utils.writeDebugGPX(g.getVertices(), "graph/g3");

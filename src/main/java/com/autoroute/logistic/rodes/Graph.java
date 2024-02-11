@@ -170,6 +170,8 @@ public class Graph {
     }
 
     public void removeEdges(long identificatorStartVertex) {
+        LOGGER.info("Start removeEdges");
+        int removedEdges = 0;
         for (int i = 0; i < vertices.size(); i++) {
             var v = vertices.get(i);
             if (i % 5000 == 0) {
@@ -196,10 +198,12 @@ public class Graph {
 
                 v.removeNeighbor(u);
                 u.removeNeighbor(v);
+                removedEdges++;
 
                 var newDistancesFromV = bfsDistance(v, depthLimit);
                 var d = newDistancesFromV.getDistance()[u.getId()];
 
+                /* debug path
                 List<Vertex> path = new ArrayList<>();
                 Vertex k = u;
                 while (k != null && !k.equals(v)) {
@@ -208,15 +212,17 @@ public class Graph {
                 }
                 path.add(v);
                 Collections.reverse(path);
+                */
 
 
-                if (d == -1 || d > depthLimit
-                ) {
+                if (d == -1 || d > depthLimit) {
                     v.addNeighbor(u);
                     u.addNeighbor(v);
+                    removedEdges--;
                 }
             }
         }
+        LOGGER.info("Finish removeEdges. Removed: " + removedEdges);
     }
 
     public void setFullGraph(Graph fullGraph) {
