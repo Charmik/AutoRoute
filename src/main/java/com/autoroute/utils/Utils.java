@@ -57,20 +57,20 @@ public class Utils {
     public static void writeDebugGPX(List<Vertex> vertices, String name) {
         ArrayList<Vertex> copy = new ArrayList<>(vertices);
         if (isDebugging()) {
-            writeGPX(GpxGenerator.generateRoute(copy, Collections.emptySet()), "o/" + name);
+            writeGPX(GpxGenerator.generateGPXWithSights(copy, Collections.emptySet()), "o/" + name);
         } else {
-            service.submit(() -> writeGPX(GpxGenerator.generateRoute(copy, Collections.emptySet()), "o/" + name));
+            service.submit(() -> writeGPX(GpxGenerator.generateGPXWithSights(copy, Collections.emptySet()), "o/" + name));
         }
     }
 
     public static void writeDebugGPX(Route route, String name) {
-        final GPX cycleGPX = GpxGenerator.generateRoute(route.route(), route.sights());
+        final GPX cycleGPX = GpxGenerator.generateGPXWithSights(route.route(), route.sights());
         final String fileName = "o/" + name;
         writeGPX(cycleGPX, fileName);
     }
 
     public static void writeGPX(Route route, String name) {
-        final GPX cycleGPX = GpxGenerator.generateRoute(route.route(), route.sights());
+        final GPX cycleGPX = GpxGenerator.generateGPXWithSights(route.route(), route.sights());
         writeGPX(cycleGPX, name);
     }
 

@@ -11,7 +11,7 @@ import java.util.Set;
 
 public class GpxGenerator {
 
-    public static GPX generateRouteWithWaypoints(List<LatLon> coordinates, List<WayPoint> wayPoints) {
+    public static GPX generateGPXWithWaypoints(List<LatLon> coordinates, List<WayPoint> wayPoints) {
         var builder = GPX.builder()
             .addTrack(track -> track
                 .addSegment(segment -> {
@@ -27,7 +27,7 @@ public class GpxGenerator {
         return builder.build();
     }
 
-    public static GPX generateRoute(List<Vertex> vertices, Set<Sight> sights) {
+    public static GPX generateGPXWithSights(List<Vertex> vertices, Set<Sight> sights) {
         var builder = GPX.builder()
             .addTrack(track -> track
                 .addSegment(segment -> {

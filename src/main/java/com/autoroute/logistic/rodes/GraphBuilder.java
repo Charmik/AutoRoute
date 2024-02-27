@@ -62,7 +62,7 @@ public class GraphBuilder {
             .filter(Vertex::isSuperVertex)
             .map(v -> new WayPoint(1, v.getLatLon(), ""))
             .toList();
-        final GPX gpx = GpxGenerator.generateRouteWithWaypoints(Collections.emptyList(), superVertexes);
+        final GPX gpx = GpxGenerator.generateGPXWithWaypoints(Collections.emptyList(), superVertexes);
         try {
             GPX.write(gpx,
                 Paths.get("o/SuperVertexes/superVertexes.gpx"));
