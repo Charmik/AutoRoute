@@ -6,6 +6,7 @@ import com.autoroute.osm.WayPoint;
 import com.autoroute.sight.Sight;
 import io.jenetics.jpx.GPX;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -28,20 +29,11 @@ public class GpxGenerator {
     }
 
     public static GPX generateGPXWithSights(List<Vertex> vertices, Set<Sight> sights) {
-        var builder = GPX.builder()
-            .addTrack(track -> track
-                .addSegment(segment -> {
-                    for (Vertex v : vertices) {
-                        var coordinate = v.getLatLon();
-                        segment.addPoint(p -> p.lat(coordinate.lat()).lon(coordinate.lon()));
-                    }
-                }));
-        for (Sight wayPoint : sights) {
-            builder.addWayPoint(b -> b.lat(wayPoint.latLon().lat())
-                .lon(wayPoint.latLon().lon())
-                .name(wayPoint.name()));
-        }
-        return builder.build();
+        List<LatLon> latLonList = vertices.stream()
+            .map(v -> new LatLon(v.getLatLon().lat(), v.getLatLon().lon()))
+            .toList();
+        List<WayPoint> wayPoints = Mapper.sightsToWayPoint(new ArrayList<>(sights));
+        return generateGPXWithWaypoints(latLonList, wayPoints);
     }
 
     public static GPX generateWithNeighbors(List<Vertex> vertices) {
