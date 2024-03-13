@@ -1,6 +1,6 @@
 package com.autoroute.telegram;
 
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import com.autoroute.telegram.db.Database;
 import com.autoroute.telegram.db.Row;
 import com.autoroute.telegram.db.State;

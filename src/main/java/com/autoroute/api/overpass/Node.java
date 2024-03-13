@@ -1,6 +1,6 @@
 package com.autoroute.api.overpass;
 
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import com.autoroute.osm.Tag;
 
 import java.util.*;

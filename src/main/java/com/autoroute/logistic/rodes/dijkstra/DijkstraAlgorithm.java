@@ -2,7 +2,7 @@ package com.autoroute.logistic.rodes.dijkstra;
 
 import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.Vertex;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;

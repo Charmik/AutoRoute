@@ -2,7 +2,7 @@ package com.autoroute.logistic.rodes;
 
 import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import com.autoroute.utils.Utils;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import org.apache.logging.log4j.LogManager;

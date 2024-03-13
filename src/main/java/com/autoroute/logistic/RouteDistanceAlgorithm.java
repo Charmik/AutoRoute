@@ -7,7 +7,6 @@ import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.logistic.rodes.*;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraCache;
-import com.autoroute.osm.LatLon;
 import com.autoroute.osm.tags.SightMapper;
 import com.autoroute.osm.tags.TagsFileReader;
 import com.autoroute.sight.Sight;

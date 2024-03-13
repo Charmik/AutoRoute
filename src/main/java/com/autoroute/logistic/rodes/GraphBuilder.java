@@ -3,7 +3,7 @@ package com.autoroute.logistic.rodes;
 import com.autoroute.api.overpass.Mapper;
 import com.autoroute.api.overpass.OverpassResponse;
 import com.autoroute.gpx.GpxGenerator;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import com.autoroute.osm.WayPoint;
 import com.autoroute.utils.Utils;
 import io.jenetics.jpx.GPX;

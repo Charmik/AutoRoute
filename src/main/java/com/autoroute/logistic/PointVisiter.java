@@ -1,6 +1,5 @@
 package com.autoroute.logistic;
 
-import com.autoroute.osm.LatLon;
 import com.autoroute.osm.WayPoint;
 
 import java.io.File;

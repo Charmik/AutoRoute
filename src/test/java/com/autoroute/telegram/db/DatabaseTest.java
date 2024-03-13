@@ -1,6 +1,6 @@
 package com.autoroute.telegram.db;
 
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;

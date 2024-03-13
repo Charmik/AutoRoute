@@ -1,6 +1,7 @@
 package com.autoroute.osm;
 
 import com.autoroute.Constants;
+import com.autoroute.logistic.LatLon;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

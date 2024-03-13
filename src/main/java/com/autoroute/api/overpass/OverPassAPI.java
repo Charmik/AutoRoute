@@ -1,6 +1,6 @@
 package com.autoroute.api.overpass;
 
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import com.autoroute.osm.Tag;
 import com.autoroute.utils.HMInterner;
 import de.westnordost.osmapi.OsmConnection;
@@ -74,7 +74,7 @@ public class OverPassAPI {
         return executeQuery(query);
     }
 
-    public OverpassResponse getRodes(@NotNull com.autoroute.osm.LatLon center, int radiusMeters) {
+    public OverpassResponse getRodes(@NotNull LatLon center, int radiusMeters) {
         StringBuilder query = new StringBuilder("<osm-script timeout=\"360\" element-limit=\"1073741824\">\n");
         query.append("<query type=\"way\">\n");
         query.append("<around lat=\"");

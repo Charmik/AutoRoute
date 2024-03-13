@@ -1,7 +1,7 @@
 package com.autoroute.gpx;
 
 import com.autoroute.logistic.rodes.Vertex;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import com.autoroute.osm.WayPoint;
 import com.autoroute.sight.Sight;
 import io.jenetics.jpx.GPX;

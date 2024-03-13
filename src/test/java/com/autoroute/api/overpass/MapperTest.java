@@ -1,7 +1,7 @@
 package com.autoroute.api.overpass;
 
 import com.autoroute.logistic.rodes.Vertex;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;

@@ -1,6 +1,6 @@
 package com.autoroute.logistic.rodes;
 
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

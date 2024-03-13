@@ -5,7 +5,7 @@ import com.autoroute.logistic.rodes.Graph;
 import com.autoroute.logistic.rodes.Route;
 import com.autoroute.logistic.rodes.Vertex;
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

@@ -1,4 +1,4 @@
-package com.autoroute.osm;
+package com.autoroute.logistic;
 
 import org.jetbrains.annotations.NotNull;
 

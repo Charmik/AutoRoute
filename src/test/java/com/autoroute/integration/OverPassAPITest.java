@@ -3,7 +3,7 @@ package com.autoroute.integration;
 import com.autoroute.api.overpass.Box;
 import com.autoroute.api.overpass.Node;
 import com.autoroute.api.overpass.OverPassAPI;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import com.autoroute.osm.Tag;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;

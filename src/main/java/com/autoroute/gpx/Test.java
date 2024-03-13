@@ -2,7 +2,7 @@ package com.autoroute.gpx;
 
 import com.autoroute.logistic.rodes.Cycle;
 import com.autoroute.logistic.rodes.Vertex;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import io.jenetics.jpx.GPX;
 import io.jenetics.jpx.Track;
 import io.jenetics.jpx.TrackSegment;

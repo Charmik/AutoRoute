@@ -1,6 +1,6 @@
 package com.autoroute.logistic.rodes;
 
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

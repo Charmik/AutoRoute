@@ -1,7 +1,6 @@
 package com.autoroute.logistic;
 
 import com.autoroute.logistic.rodes.Vertex;
-import com.autoroute.osm.LatLon;
 
 import java.util.List;
 

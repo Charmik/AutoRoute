@@ -3,7 +3,7 @@ package com.autoroute;
 import com.autoroute.logistic.LogisticUtils;
 import com.autoroute.logistic.PointVisiter;
 import com.autoroute.logistic.RouteDistanceAlgorithm;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import com.autoroute.telegram.Bot;
 import com.autoroute.telegram.db.Database;
 import com.autoroute.telegram.db.Row;

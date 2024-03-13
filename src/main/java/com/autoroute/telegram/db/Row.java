@@ -1,6 +1,6 @@
 package com.autoroute.telegram.db;
 
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;

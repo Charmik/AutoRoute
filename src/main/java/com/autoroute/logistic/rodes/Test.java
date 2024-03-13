@@ -1,7 +1,7 @@
 package com.autoroute.logistic.rodes;
 
 import com.autoroute.logistic.rodes.dijkstra.DijkstraAlgorithm;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 
 import java.util.ArrayList;
 import java.util.List;

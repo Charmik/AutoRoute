@@ -6,7 +6,7 @@ import com.autoroute.api.overpass.Way;
 import com.autoroute.gpx.GpxGenerator;
 import com.autoroute.logistic.rodes.Route;
 import com.autoroute.logistic.rodes.Vertex;
-import com.autoroute.osm.LatLon;
+import com.autoroute.logistic.LatLon;
 import io.jenetics.jpx.GPX;
 
 import java.io.File;
