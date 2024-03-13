@@ -175,7 +175,7 @@ public class Cycle {
 //            && (cycleDistance > minKM / 2)
             && routeDistance >= minKM
             && routeDistance <= maxKM
-            && (cycleDistance > routeDistance * 0.3)
+            && (cycleDistance > routeDistance * 0.5)
         ) {
             return true;
         }
