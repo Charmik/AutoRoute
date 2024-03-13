@@ -28,7 +28,7 @@ public class GraphRandomTesting {
 //            int minDistance = random.nextInt(150);
 //            int minDistance = random.nextInt(150);
             int minDistance = 100;
-            int maxDistance = 150;
+            int maxDistance = 300;
             if (minDistance > maxDistance) {
                 int t = minDistance;
                 minDistance = maxDistance;
