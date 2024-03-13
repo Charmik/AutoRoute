@@ -48,6 +48,7 @@ public class Main {
                 }
             } catch (Throwable t) {
                 LOGGER.error("exception in main: ", t);
+                // TODO: skip request for future process no eliminate infite loop over "bad" request. write to log/telegram about it.
             }
         }
     }
